@@ -23,7 +23,8 @@
 void *fifo_reader (void *arg) {
   //pthread_mutex_lock(&lock);
   char *fifo_registry = (char *)arg;
-  printf("waiting\n");
+  char *name = client_name(fifo_registry);
+  printf("reading from %s\n", fifo_registry);
   fflush(stdout);
   while (1) {
     int fd = open(fifo_registry, O_RDONLY);
@@ -33,6 +34,7 @@ void *fifo_reader (void *arg) {
     }
     char opcode;
     int interrupted = 0;
+    printf("reading\n");
     if (read_all(fd, &opcode, sizeof(opcode), &interrupted) != 1) {
       if (interrupted) {
         write_str(STDERR_FILENO, "Read operation was interrupted\n");
@@ -40,6 +42,7 @@ void *fifo_reader (void *arg) {
       close(fd);
       continue;
     }
+    printf("opcode: %d\n", opcode);
  
     switch (opcode) {
       case OP_CODE_CONNECT:
@@ -51,7 +54,9 @@ void *fifo_reader (void *arg) {
         printf("disconnecting\n");
         break;
       case OP_CODE_SUBSCRIBE:
-        // Handle command operation
+        if (subscribe(fd,name)) {
+          write_str(STDERR_FILENO, "Failed to subscribe\n");
+        }
         break;
       case OP_CODE_UNSUBSCRIBE:
         // Handle command operation

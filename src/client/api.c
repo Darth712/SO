@@ -119,6 +119,10 @@ int kvs_subscribe(const char* key) {
   char response;
   read(fd_resp, &response, sizeof(response));
   printf("response: %d\n", response);
+  if (response != OP_CODE_SUBSCRIBE) {
+    return 1;
+  }
+  return 0;
 }
 
 int kvs_unsubscribe(const char* key) {

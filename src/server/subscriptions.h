@@ -29,9 +29,10 @@ typedef struct SubscriptionHashTable {
 
 int sht_init();
 SubscriptionHashTable* create_subscription_table();
+char *client_name(const char *client_fifo);
 unsigned long hash_subscription(const char *key);
 int register_client(const char *client_fifo);
-int add_subscription(const char *client_fifo, const char *key);
+int add_subscription( char *name, const char *key);
 int remove_subscription(const char *client_fifo, const char *key);
 int notify_subscribers(const char *key);
 

@@ -113,9 +113,8 @@ int unregister_client(const char *client_fifo) {
     return -1; // Client not found
 }
 
-int add_subscription(const char *client_fifo, const char *key) {
+int add_subscription(char *name, const char *key) {
     pthread_mutex_lock(&sht->mutex);
-    char* name = client_name(client_fifo);
     unsigned long index = hash_subscription(name);
     Client *current = sht->table[index];
 

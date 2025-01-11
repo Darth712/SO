@@ -271,6 +271,9 @@ static void dispatch_threads(DIR *dir,const char *fifo_registry) {
     perror("Error creating server-to-client FIFO");
     return;
   }
+  pthread_t receiver_thread;
+  pthread_create(&receiver_thread, NULL, fifo_reader, (void *)fifo_registry);
+  pthread_join(receiver_thread, NULL);
 
   for (unsigned int i = 0; i < max_threads; i++) {
     if (pthread_join(threads[i], NULL) != 0) {
@@ -346,11 +349,6 @@ int main(int argc, char **argv) {
   }
   fifo_registry = argv[4];
   dispatch_threads(dir, fifo_registry);
-  printf("waiting for client\n");
-  pthread_t receiver_thread;
-  pthread_create(&receiver_thread, NULL, fifo_reader, fifo_registry);
-
-  pthread_join(receiver_thread, NULL);
 
   if (closedir(dir) == -1) {
     fprintf(stderr, "Failed to close directory\n");

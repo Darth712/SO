@@ -24,7 +24,6 @@ void *fifo_reader (void *arg) {
   //pthread_mutex_lock(&lock);
   char *fifo_registry = (char *)arg;
   char *name = client_name(fifo_registry);
-  printf("reading from %s\n", fifo_registry);
   fflush(stdout);
   while (1) {
     int fd = open(fifo_registry, O_RDONLY);
@@ -34,7 +33,6 @@ void *fifo_reader (void *arg) {
     }
     char opcode;
     int interrupted = 0;
-    printf("reading\n");
     if (read_all(fd, &opcode, sizeof(opcode), &interrupted) != 1) {
       if (interrupted) {
         write_str(STDERR_FILENO, "Read operation was interrupted\n");
@@ -42,20 +40,22 @@ void *fifo_reader (void *arg) {
       close(fd);
       continue;
     }
-    printf("opcode: %d\n", opcode);
  
     switch (opcode) {
       case OP_CODE_CONNECT:
+        printf("Connecting\n");
         if(connect(fd)){
           write_str(STDERR_FILENO, "Failed to connect to server\n");
         }
         break;
       case OP_CODE_DISCONNECT:
+        printf("Disconnecting\n");
         if (disconnect(name + 3)) {
           write_str(STDERR_FILENO, "Failed to disconnect\n");
         }
         break;
       case OP_CODE_SUBSCRIBE:
+        printf("Subscribing\n");
         if (subscribe(fd,name + 3)) {
           write_str(STDERR_FILENO, "Failed to subscribe\n");
         }
@@ -70,6 +70,7 @@ void *fifo_reader (void *arg) {
 
     close(fd);
   }
+  printf("exiting\n");
   return NULL;
 }
 
@@ -78,9 +79,7 @@ void *fifo_writer (void *arg) {
     WriterArgs *args = (WriterArgs *)arg;
     char *fifo_registry = args->fifo_path;
     char *message = args->data;
-    printf("writing to %s\n", args->fifo_path);
-    printf("message: %s\n", args->data);
-
+ 
     int fd = open(fifo_registry, O_WRONLY);
     if (fd == -1) {
         write_str(STDERR_FILENO, "Failed to open FIFO for writing\n");

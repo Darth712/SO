@@ -21,7 +21,11 @@
 #include "kvs.h"
 #include "operations.h"
 
+const int s = MAX_SESSION_COUNT;
+int session_count = 0;
 
+static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t session_cond = PTHREAD_COND_INITIALIZER;
 
 int connect (int fd_server) {
   // Initialize buffers
@@ -45,7 +49,13 @@ int connect (int fd_server) {
     fprintf(stderr, "Failed to allocate memory for threads\n");
     return 1;
   }
-
+  pthread_mutex_lock(&session_mutex);
+  while (session_count >= s) {
+    // Wait for a signal that a session slot is freed
+    pthread_cond_wait(&session_cond, &session_mutex);
+  }
+  session_count++;
+  pthread_mutex_unlock(&session_mutex);
   pthread_create(&thread[0], NULL, fifo_reader, (void *)&req_pipe_path);
   int fd_resp = open(resp_pipe_path, O_WRONLY);
   if (fd_resp == -1) {
@@ -80,6 +90,10 @@ int disconnect(const char *name) {
   response[2] = '\0';
   write(fd_resp, response, sizeof(response));
   close(fd_resp);
+  pthread_mutex_lock(&session_mutex);
+  session_count--;
+  pthread_cond_signal(&session_cond);
+  pthread_mutex_unlock(&session_mutex);
 }
 
 int subscribe(int fd_req, char *name) {
@@ -88,7 +102,7 @@ int subscribe(int fd_req, char *name) {
   char resp_pipe_path[256] = "/tmp/resp";
   char notif_pipe_path[256] = "/tmp/notif";
   strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
-  strncpy(notif_pipe_path + 9, name, strlen(name) * sizeof(char));
+  strncpy(notif_pipe_path + 10, name, strlen(name) * sizeof(char));
 
   int fd_resp = open(resp_pipe_path, O_WRONLY);
   if (fd_resp == -1) {
@@ -109,6 +123,7 @@ int subscribe(int fd_req, char *name) {
 
   if (kvs_subscribe(key,notif_pipe_path,name)) {
     strncpy(result, "0", sizeof(result));
+    kvs_print_notif_pipes(key);
   } else {
     strncpy(result, "1", sizeof(result));
   }
@@ -128,7 +143,7 @@ int unsubscribe (int fd_req, char *name) {
   char resp_pipe_path[256] = "/tmp/resp";
   char notif_pipe_path[256] = "/tmp/notif";
   strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
-  strncpy(notif_pipe_path + 9, name, strlen(name) * sizeof(char));
+  strncpy(notif_pipe_path + 10, name, strlen(name) * sizeof(char));
 
   int fd_resp = open(resp_pipe_path, O_WRONLY);
   if (fd_resp == -1) {
@@ -149,6 +164,7 @@ int unsubscribe (int fd_req, char *name) {
 
   if (kvs_unsubscribe(key,notif_pipe_path,name)) {
     strncpy(result, "0", sizeof(result));
+    kvs_print_notif_pipes(key);
   } else {
     strncpy(result, "1", sizeof(result));
   }

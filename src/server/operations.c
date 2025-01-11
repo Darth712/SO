@@ -287,3 +287,21 @@ int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char
     pthread_rwlock_unlock(&kvs_table->tablelock);
     return 0; // Key not found
 }
+
+void kvs_print_notif_pipes(const char *key) {
+    pthread_rwlock_rdlock(&kvs_table->tablelock);
+    KeyNode *keyNode = kvs_table->table[hash(key)];
+    while (keyNode) {
+        if (strcmp(keyNode->key, key) == 0) {
+            printf("Notification pipes for key: %s\n", key);
+            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+                printf("  [%d] %s\n", i, keyNode->notif_pipe_paths[i]);
+            }
+            pthread_rwlock_unlock(&kvs_table->tablelock);
+            return;
+        }
+        keyNode = keyNode->next;
+    }
+    pthread_rwlock_unlock(&kvs_table->tablelock);
+    printf("No notification pipes found for key: %s\n", key);
+}

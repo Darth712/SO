@@ -54,6 +54,8 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char *notif_pipe_path, char *
 
 int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *name);
 
+void kvs_print_notif_pipes(const char *key);
+
 // Setter for max_backups
 // @param _max_backups
 void set_max_backups(int _max_backups);

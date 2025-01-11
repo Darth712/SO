@@ -1,4 +1,4 @@
-#ifndef SUBSCRIPTIONS_H
+/*#ifndef SUBSCRIPTIONS_H
 #define SUBSCRIPTIONS_H
 
 #include <pthread.h>
@@ -36,4 +36,4 @@ int add_subscription( char *name, const char *key);
 int remove_subscription(const char *client_fifo, const char *key);
 int notify_subscribers(const char *key);
 
-#endif // SUBSCRIPTIONS_H
+#endif // SUBSCRIPTIONS_H*/

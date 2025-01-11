@@ -181,3 +181,51 @@ void kvs_wait(unsigned int delay_ms) {
   struct timespec delay = delay_to_timespec(delay_ms);
   nanosleep(&delay, NULL);
 }
+
+int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *name) {
+    pthread_rwlock_wrlock(&kvs_table->tablelock);
+    KeyNode *keyNode = kvs_table->table[hash(key)];
+    while (keyNode != NULL) {
+        if (strcmp(keyNode->key, key) == 0) {
+            // Duplicate notif_pipe_path
+            char *notif_pipe = strdup(notif_pipe_path);
+            if (!notif_pipe) {
+                pthread_rwlock_unlock(&kvs_table->tablelock);
+                return 1;
+            }
+
+            // Save old array of pointers
+            char **old_paths = keyNode->notif_pipe_paths;
+
+            // Allocate new array with one extra slot
+            keyNode->notif_pipe_paths = malloc((keyNode->notif_pipe_count + 1) * sizeof(char *));
+            if (!keyNode->notif_pipe_paths) {
+                // Restore old pointer and free new string
+                keyNode->notif_pipe_paths = old_paths;
+                free(notif_pipe);
+                pthread_rwlock_unlock(&kvs_table->tablelock);
+                return 1;
+            }
+
+            // Copy old pointers to new array
+            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+                keyNode->notif_pipe_paths[i] = old_paths[i];
+            }
+
+            // Free the old pointer array (not the strings)
+            if (old_paths) {
+                free(old_paths);
+            }
+
+            // Add the new path at the end
+            keyNode->notif_pipe_paths[keyNode->notif_pipe_count] = notif_pipe;
+            keyNode->notif_pipe_count++;
+
+            pthread_rwlock_unlock(&kvs_table->tablelock);
+            return 0;
+        }
+        keyNode = keyNode->next;
+    }
+    pthread_rwlock_unlock(&kvs_table->tablelock);
+    return 1; // Key not found
+}

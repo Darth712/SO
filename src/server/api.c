@@ -18,6 +18,7 @@
 #include "../common/constants.h"
 #include "subscriptions.h"
 #include "fifo.h"
+#include "kvs.h"
 
 
 
@@ -58,7 +59,7 @@ int connect (int fd_server) {
   response[2] = '\0';
   write(fd_resp, response, sizeof(response));
   char *name = client_name(req_pipe_path);
-  register_client(name + 3);
+
   // Close the server pipe after reading all data
   return 0;
 }
@@ -84,7 +85,9 @@ int subscribe(int fd_req, char *name) {
   char key[MAX_STRING_SIZE];
   char result[2];
   char resp_pipe_path[256] = "/tmp/resp";
+  char notif_pipe_path[256] = "/tmp/notif";
   strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
+  strncpy(notif_pipe_path + 9, name, strlen(name) * sizeof(char));
 
   int fd_resp = open(resp_pipe_path, O_WRONLY);
   if (fd_resp == -1) {
@@ -103,13 +106,11 @@ int subscribe(int fd_req, char *name) {
     return 1;
   }
 
-  if (add_subscription(name, key)) {
-    write_str(STDERR_FILENO, "Failed to subscribe\n");
+  /*if (kvs_subscribe(key,notif_pipe_path,name) == 0) {
+    strncpy(result, "0", sizeof(result));
+  } else {
     strncpy(result, "1", sizeof(result));
-    write(fd_resp, &result, sizeof(result));
-    close(fd_resp);
-    return 1;
-  }
+  }*/
   char response [3] = {0};
   response[0] = '3';
   response[1] = '0';

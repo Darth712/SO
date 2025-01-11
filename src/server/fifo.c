@@ -20,6 +20,11 @@
 #include "api.h"
 #include "fifo.h"
 
+char *client_name(const char *client_fifo) {
+    const char *last_slash = strrchr(client_fifo, '/');
+    return (last_slash != NULL) ? (char *)(last_slash + 1) : (char *)client_fifo;
+}
+
 void *fifo_reader (void *arg) {
   //pthread_mutex_lock(&lock);
   char *fifo_registry = (char *)arg;
@@ -72,22 +77,4 @@ void *fifo_reader (void *arg) {
   }
   printf("exiting\n");
   return NULL;
-}
-
-void *fifo_writer (void *arg) {
-    //pthread_mutex_lock(&lock);  
-    WriterArgs *args = (WriterArgs *)arg;
-    char *fifo_registry = args->fifo_path;
-    char *message = args->data;
- 
-    int fd = open(fifo_registry, O_WRONLY);
-    if (fd == -1) {
-        write_str(STDERR_FILENO, "Failed to open FIFO for writing\n");
-        return NULL;
-    }
-
-    write(fd, message, strlen(message));
-    close(fd);
-
-    return NULL;
 }

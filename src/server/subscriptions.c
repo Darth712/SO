@@ -1,4 +1,4 @@
-#include "subscriptions.h"
+/*#include "subscriptions.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -35,7 +35,7 @@ unsigned long hash_subscription(const char *key) {
     unsigned long hash = 5381;
     int c;
     while ((c = *key++))
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c 
     return hash % SUBSCRIPTION_TABLE_SIZE;
 }
 
@@ -238,4 +238,4 @@ int notify_subscribers(const char *key) {
 
     pthread_mutex_unlock(&sht->mutex);
     return 0; // Success
-}
+} */

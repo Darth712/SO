@@ -8,7 +8,8 @@
 typedef struct KeyNode {
   char *key;
   char *value;
-  char **subscribers;
+  char **notif_pipe_paths;
+  int notif_pipe_count;
   struct KeyNode *next;
 } KeyNode;
 

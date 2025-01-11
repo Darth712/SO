@@ -337,11 +337,6 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if (sht_init()) {
-    write_str(STDERR_FILENO, "Failed to initialize subscription table\n");
-    return 1;
-  }
-
   DIR *dir = opendir(argv[1]);
   if (dir == NULL) {
     fprintf(stderr, "Failed to open directory: %s\n", argv[1]);

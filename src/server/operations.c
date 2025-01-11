@@ -191,7 +191,7 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *
             char *notif_pipe = strdup(notif_pipe_path);
             if (!notif_pipe) {
                 pthread_rwlock_unlock(&kvs_table->tablelock);
-                return 1;
+                return 0;
             }
 
             // Save old array of pointers
@@ -204,7 +204,7 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *
                 keyNode->notif_pipe_paths = old_paths;
                 free(notif_pipe);
                 pthread_rwlock_unlock(&kvs_table->tablelock);
-                return 1;
+                return 0;
             }
 
             // Copy old pointers to new array
@@ -222,10 +222,10 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *
             keyNode->notif_pipe_count++;
 
             pthread_rwlock_unlock(&kvs_table->tablelock);
-            return 0;
+            return 1;
         }
         keyNode = keyNode->next;
     }
     pthread_rwlock_unlock(&kvs_table->tablelock);
-    return 1; // Key not found
+    return 0; // Key not found
 }

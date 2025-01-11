@@ -19,6 +19,7 @@
 #include "subscriptions.h"
 #include "fifo.h"
 #include "kvs.h"
+#include "operations.h"
 
 
 
@@ -106,14 +107,14 @@ int subscribe(int fd_req, char *name) {
     return 1;
   }
 
-  /*if (kvs_subscribe(key,notif_pipe_path,name) == 0) {
+  if (kvs_subscribe(key,notif_pipe_path,name)) {
     strncpy(result, "0", sizeof(result));
   } else {
     strncpy(result, "1", sizeof(result));
-  }*/
+  }
   char response [3] = {0};
   response[0] = '3';
-  response[1] = '0';
+  response[1] = result[0];
   response[2] = '\0';
   write(fd_resp, response, sizeof(response));
   close(fd_resp);

@@ -35,6 +35,7 @@ int connect (int fd_server) {
       close(fd_server);
       return 1;
   }
+
   printf("%s\n",total_pipe_path);
   strncpy(req_pipe_path, total_pipe_path, sizeof(req_pipe_path) - 1);
   strncpy(resp_pipe_path, total_pipe_path + MAX_PIPE_PATH_LENGTH, sizeof(resp_pipe_path) - 1);
@@ -45,10 +46,7 @@ int connect (int fd_server) {
     return 1;
   }
 
-  
-  register_client(req_pipe_path);
   pthread_create(&thread[0], NULL, fifo_reader, (void *)&req_pipe_path);
-  // pthread_create(&thread[0], NULL, fifo_reader, (void *)&server_pipe_path);
   printf("waiting for thread\n");
   int fd_resp = open(resp_pipe_path, O_WRONLY);
   if (fd_resp == -1) {
@@ -57,14 +55,29 @@ int connect (int fd_server) {
   }
   char opcode = OP_CODE_CONNECT;
   write(fd_resp, &opcode, sizeof(opcode));
- 
+  char *name = client_name(req_pipe_path);
+  printf("name: %s\n", name);
+  register_client(name + 3);
   // Close the server pipe after reading all data
-
   printf("all reads done\n");
   printf(" %s,%s,%s\n", req_pipe_path,resp_pipe_path,notif_pipe_path);
   printf("Connected to server\n");
   return 0;
 }
+
+int disconnect(const char *name) {
+  char opcode = OP_CODE_DISCONNECT;
+  char resp_pipe_path[256] = "/tmp/resp";
+  strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
+  int fd_resp = open(resp_pipe_path, O_WRONLY);
+  if (fd_resp == -1) {
+    perror("Error opening response pipe");
+    return 1;
+  }
+  write(fd_resp, &opcode, sizeof(opcode));
+  return 0;
+}
+
 int subscribe(int fd_req, char *name) {
   char key[MAX_STRING_SIZE];
   printf("crazy\n");
@@ -73,6 +86,7 @@ int subscribe(int fd_req, char *name) {
     return 1;
   }
   printf("subscribing to %s\n", key);
+  printf("name: %s\n", name);
   if (add_subscription(name, key)) {
     write_str(STDERR_FILENO, "Failed to subscribe\n");
     return 1;

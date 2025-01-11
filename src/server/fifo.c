@@ -51,10 +51,12 @@ void *fifo_reader (void *arg) {
         }
         break;
       case OP_CODE_DISCONNECT:
-        printf("disconnecting\n");
+        if (disconnect(name + 3)) {
+          write_str(STDERR_FILENO, "Failed to disconnect\n");
+        }
         break;
       case OP_CODE_SUBSCRIBE:
-        if (subscribe(fd,name)) {
+        if (subscribe(fd,name + 3)) {
           write_str(STDERR_FILENO, "Failed to subscribe\n");
         }
         break;

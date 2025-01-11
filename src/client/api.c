@@ -114,6 +114,11 @@ int kvs_disconnect(void) {
 int kvs_subscribe(const char* key) {
   // send subscribe message to request pipe and wait for response in response pipe
   char opcode = OP_CODE_SUBSCRIBE;
+  fd_req = open(s_req_pipe_path, O_WRONLY);
+  if (fd_req == -1) {
+    perror("Error opening request pipe");
+    return 1;
+  }
   write(fd_req, &opcode, sizeof(opcode));
   write(fd_req, key, strlen(key) + 1);
   char response;

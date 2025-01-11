@@ -66,7 +66,10 @@ void *fifo_reader (void *arg) {
         }
         break;
       case OP_CODE_UNSUBSCRIBE:
-        // Handle command operation
+        printf("Unsubscribing\n");
+        if (unsubscribe(fd,name + 3)) {
+          write_str(STDERR_FILENO, "Failed to unsubscribe\n");
+        }
         break;
       default:
         write_str(STDERR_FILENO, "Unknown opcode\n");

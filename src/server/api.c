@@ -121,3 +121,43 @@ int subscribe(int fd_req, char *name) {
 
   return 0;
 }
+
+int unsubscribe (int fd_req, char *name) {
+  char key[MAX_STRING_SIZE];
+  char result[2];
+  char resp_pipe_path[256] = "/tmp/resp";
+  char notif_pipe_path[256] = "/tmp/notif";
+  strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
+  strncpy(notif_pipe_path + 9, name, strlen(name) * sizeof(char));
+
+  int fd_resp = open(resp_pipe_path, O_WRONLY);
+  if (fd_resp == -1) {
+    perror("Error opening response pipe");
+    strncpy(result, "1", sizeof(result));
+    write(fd_resp, &result, sizeof(result));
+    close(fd_resp);
+    return 1;
+  }
+
+  if (read(fd_req, key, MAX_STRING_SIZE) < 0) {
+    write_str(STDERR_FILENO, "Failed to read response\n");
+    strncpy(result, "1", sizeof(result));
+    write(fd_resp, &result, sizeof(result));
+    close(fd_resp);
+    return 1;
+  }
+
+  if (kvs_unsubscribe(key,notif_pipe_path,name)) {
+    strncpy(result, "0", sizeof(result));
+  } else {
+    strncpy(result, "1", sizeof(result));
+  }
+  char response [3] = {0};
+  response[0] = '4';
+  response[1] = result[0];
+  response[2] = '\0';
+  write(fd_resp, response, sizeof(response));
+  close(fd_resp);
+
+  return 0;
+}

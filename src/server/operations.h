@@ -52,6 +52,8 @@ void kvs_wait(unsigned int delay_ms);
 
 int kvs_subscribe(char key[MAX_STRING_SIZE], const char *notif_pipe_path, char *name);
 
+int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *name);
+
 // Setter for max_backups
 // @param _max_backups
 void set_max_backups(int _max_backups);

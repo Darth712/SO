@@ -229,3 +229,61 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *
     pthread_rwlock_unlock(&kvs_table->tablelock);
     return 0; // Key not found
 }
+
+int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *name) {
+    pthread_rwlock_wrlock(&kvs_table->tablelock);
+    KeyNode *keyNode = kvs_table->table[hash(key)];
+    while (keyNode != NULL) {
+        if (strcmp(keyNode->key, key) == 0) {
+            // Find the index of the pipe to remove
+            int remove_index = -1;
+            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+                if (strcmp(keyNode->notif_pipe_paths[i], notif_pipe_path) == 0) {
+                    remove_index = i;
+                    break;
+                }
+            }
+            if (remove_index == -1) {
+                // Pipe not found
+                pthread_rwlock_unlock(&kvs_table->tablelock);
+                return 0;
+            }
+
+            // Free the string for the pipe to be removed
+            free(keyNode->notif_pipe_paths[remove_index]);
+
+            // If only one pipe, free array entirely
+            if (keyNode->notif_pipe_count == 1) {
+                free(keyNode->notif_pipe_paths);
+                keyNode->notif_pipe_paths = NULL;
+                keyNode->notif_pipe_count = 0;
+                pthread_rwlock_unlock(&kvs_table->tablelock);
+                return 1;
+            }
+
+            // Rebuild array without removed element
+            char **old_paths = keyNode->notif_pipe_paths;
+            keyNode->notif_pipe_count--;
+            keyNode->notif_pipe_paths = malloc(keyNode->notif_pipe_count * sizeof(char*));
+            if (!keyNode->notif_pipe_paths) {
+                // Restore old array in case of failure
+                keyNode->notif_pipe_paths = old_paths;
+                keyNode->notif_pipe_count++;
+                pthread_rwlock_unlock(&kvs_table->tablelock);
+                return 0;
+            }
+            int j = 0;
+            for (int i = 0; i < keyNode->notif_pipe_count + 1; i++) {
+                if (i != remove_index) {
+                    keyNode->notif_pipe_paths[j++] = old_paths[i];
+                }
+            }
+            free(old_paths);
+            pthread_rwlock_unlock(&kvs_table->tablelock);
+            return 1;
+        }
+        keyNode = keyNode->next;
+    }
+    pthread_rwlock_unlock(&kvs_table->tablelock);
+    return 0; // Key not found
+}

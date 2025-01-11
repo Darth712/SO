@@ -182,7 +182,7 @@ void kvs_wait(unsigned int delay_ms) {
   nanosleep(&delay, NULL);
 }
 
-int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *name) {
+int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path) {
     pthread_rwlock_wrlock(&kvs_table->tablelock);
     KeyNode *keyNode = kvs_table->table[hash(key)];
     while (keyNode != NULL) {
@@ -230,7 +230,7 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *
     return 0; // Key not found
 }
 
-int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *name) {
+int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path) {
     pthread_rwlock_wrlock(&kvs_table->tablelock);
     KeyNode *keyNode = kvs_table->table[hash(key)];
     while (keyNode != NULL) {

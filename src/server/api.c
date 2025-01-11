@@ -76,20 +76,22 @@ int connect (int fd_server) {
 }
 
 int disconnect(const char *name) {
-  char opcode = OP_CODE_DISCONNECT;
+  char response [3] = {0};
+  response[1] = '0';
   char resp_pipe_path[256] = "/tmp/resp";
   strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
   int fd_resp = open(resp_pipe_path, O_WRONLY);
   if (fd_resp == -1) {
     perror("Error opening response pipe");
+    response[1] = '1';
     return 1;
   }
-  char response [3] = {0};
   response[0] = '2';
-  response[1] = '0';
   response[2] = '\0';
+  printf ("Disconnect response: %s\n", response);
   write(fd_resp, response, sizeof(response));
   close(fd_resp);
+  // free (thread)
   pthread_mutex_lock(&session_mutex);
   session_count--;
   pthread_cond_signal(&session_cond);

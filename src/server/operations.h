@@ -50,9 +50,9 @@ void kvs_wait_backup();
 /// @param delay_us Delay in milliseconds.
 void kvs_wait(unsigned int delay_ms);
 
-int kvs_subscribe(char key[MAX_STRING_SIZE], const char *notif_pipe_path, char *name);
+int kvs_subscribe(char key[MAX_STRING_SIZE], const char *notif_pipe_path);
 
-int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path, char *name);
+int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path);
 
 void kvs_print_notif_pipes(const char *key);
 

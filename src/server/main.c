@@ -26,8 +26,6 @@ struct SharedData {
   pthread_mutex_t directory_mutex;
 };
 
-char *fifo_registry = {0};
-
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t n_current_backups_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -327,7 +325,7 @@ int main(int argc, char **argv) {
     write_str(STDERR_FILENO, "Invalid number of threads\n");
     return 0;
   }
-  if (strlen(argv[4]) > 255 | strlen(argv[4]) < 1) {
+  if (strlen(argv[4]) > 255 || strlen(argv[4]) < 1) {
     write_str(STDERR_FILENO, "Invalid path\n");
     return 0;
   }
@@ -342,8 +340,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Failed to open directory: %s\n", argv[1]);
     return 0;
   }
-  fifo_registry = argv[4];
+  char *fifo_registry = malloc (strlen(argv[4] + 1));
+  strcpy(fifo_registry, argv[4]);
   dispatch_threads(dir, fifo_registry);
+  free(fifo_registry);
 
   if (closedir(dir) == -1) {
     fprintf(stderr, "Failed to close directory\n");

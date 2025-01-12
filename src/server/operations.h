@@ -58,7 +58,7 @@ void kvs_unsubscribe_all_keys(const char *client_name);
 
 void kvs_subscription_terminate();
 
-int kvs_notify(const char *key, const char *notif);
+int kvs_notify(const char *key, char message[MAX_STRING_SIZE]);
 
 void kvs_print_notif_pipes(const char *key);
 

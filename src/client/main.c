@@ -12,11 +12,7 @@
 
 static void* notification_handler(void* arg) {
     char* notif_path = (char*)arg;
-    int notif_fd = open(notif_path, O_RDONLY);
-    if (notif_fd < 0) {
-        perror("Failed to open notification FIFO");
-        return NULL;
-    }
+
 
 /*
   // Read server response: OP_CODE(1) + result
@@ -37,15 +33,24 @@ static void* notification_handler(void* arg) {
 
 
     while (1) {
-        char buffer[256];
-        ssize_t n = read(notif_fd, buffer, sizeof(buffer) - 1);
-        if (n <= 0) {
-            break; // End if closed or error
+        char buffer[MAX_STRING_SIZE];
+        int notif_fd = open(notif_path, O_RDONLY);
+        if (notif_fd < 0) {
+          perror("Failed to open notification FIFO");
+          return NULL;
         }
-        buffer[n] = '\0';
+        int interrupted = 0;
+        if (read_all(notif_fd, buffer, sizeof(buffer),&interrupted) != 1) {
+          if (interrupted) {
+            perror("Error reading notif pipe\n");
+          } 
+          printf("Notification: %s\n", buffer);
+          close(notif_fd);
+          continue;
+        }
         printf("Notification: %s\n", buffer);
+        close(notif_fd);
     }
-    close(notif_fd);
     return NULL;
 }
 

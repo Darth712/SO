@@ -1,9 +1,11 @@
-WRITE [(a,anna)(b,bernardo)]
-WRITE [(d,dinis)(c,carlota)]
-READ [x,z,l,v]
-SHOW
-BACKUP
-DELETE [c]
-READ [c]
-WAIT 1000
+WRITE [(a,anna)]
+WAIT 8000
+WRITE [(a,assa)]
+WAIT 5000
+WRITE [(a,abba)]
+WAIT 5000
+WRITE [(a,atta)]
+WAIT 5000
+WRITE [(a,acca)]
+WAIT 5000
 SHOW

@@ -66,10 +66,16 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE],
     }
     else {
       if (!old_value || strcmp(old_value, values[i]) != 0) {
-        char *message[MAX_STRING_SIZE];
-        char *new_value = read_pair(kvs_table, keys[i]);
-        snprintf(*message,strlen(*message) * sizeof(char),"(<%s>,<%s>",keys[i],new_value);
-        kvs_notify(keys[i], *message);
+        char message[MAX_STRING_SIZE]; // Single buffer for the message
+        char *new_value = read_pair(kvs_table, keys[i]); // Assume this returns a valid string
+
+        if (new_value) { // Check if read_pair returned a valid value
+            snprintf(message, MAX_STRING_SIZE, "(<%s>,<%s>)", keys[i], new_value);
+        } else {
+            snprintf(message, MAX_STRING_SIZE, "(<%s>,<null>)", keys[i]); // Handle null case
+        }
+        printf ("%s\n",new_value);
+        kvs_notify(keys[i], message);
         free(new_value);
 
       }
@@ -453,7 +459,7 @@ void close_all_fifos() {
     pthread_rwlock_unlock(&kvs_table->tablelock);
 }
 
-int kvs_notify(const char *key, const char *message) {
+int kvs_notify(const char *key, char message[MAX_STRING_SIZE]) {
     KeyNode *keyNode = kvs_table->table[hash(key)];
     while (keyNode) {
         if (strcmp(keyNode->key, key) == 0) {

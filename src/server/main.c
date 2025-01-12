@@ -41,7 +41,9 @@ volatile sig_atomic_t sigusr1_received = 0;
 
 // Signal handler for SIGUSR1
 void handle_sigusr1(int signum) {
+  if (signum == SIGUSR1) {
     sigusr1_received = 1;
+  }
 }
 
 // Function to set up the SIGUSR1 handler
@@ -286,7 +288,7 @@ static void dispatch_threads(DIR *dir,const char *fifo_registry) {
     }
   }
 
-  // ler do FIFO de registo///////////////////////////////////////////////////////////////////////////////////////////////
+  
   unlink (fifo_registry);
   if(mkfifo(fifo_registry, 0666) < 0){
     perror("Error creating server-to-client FIFO");
@@ -295,6 +297,10 @@ static void dispatch_threads(DIR *dir,const char *fifo_registry) {
   pthread_t receiver_thread;
   pthread_create(&receiver_thread, NULL, fifo_reader, (void *)fifo_registry);
   pthread_join(receiver_thread, NULL);
+
+  // for (size_t i = 0; i < MAX_SESSION_COUNT; i++) {
+  //  pthread_create(&receiver_thread, NULL, fifo_reader, (void *)fifo_registry);
+  // }
 
   for (unsigned int i = 0; i < max_threads; i++) {
     if (pthread_join(threads[i], NULL) != 0) {

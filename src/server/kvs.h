@@ -9,7 +9,7 @@ typedef struct KeyNode {
   char *key;
   char *value;
   char **notif_pipe_paths;
-  int notif_pipe_count;
+  size_t notif_pipe_count;
   struct KeyNode *next;
 } KeyNode;
 

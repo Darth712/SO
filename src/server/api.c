@@ -26,9 +26,6 @@ int session_count = 0;
 
 extern sem_t session_sem;
 
-static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t session_cond = PTHREAD_COND_INITIALIZER;
-
 int connect(int fd_server) {
   // Initialize buffers
   char total_pipe_path[MAX_PIPE_PATH_LENGTH *3 + 1] = {0};
@@ -77,9 +74,7 @@ int connect(int fd_server) {
   response[1] = '0';
   response[2] = '\0';
   write(fd_resp, response, sizeof(response));
-  char *name = client_name(req_pipe_path);
-
-  // Close the server pipe after reading all data
+  close(fd_server);
   return 0;
 }
 
@@ -135,10 +130,9 @@ int subscribe(int fd_req, char *name) {
   }
 
   if (kvs_subscribe(key,notif_pipe_path)) {
-    strncpy(result, "0", sizeof(result));
-    kvs_print_notif_pipes(key);
-  } else {
     strncpy(result, "1", sizeof(result));
+  } else {
+    strncpy(result, "0", sizeof(result));
   }
   char response [3] = {0};
   response[0] = '3';
@@ -177,7 +171,6 @@ int unsubscribe (int fd_req, char *name) {
 
   if (kvs_unsubscribe(key,notif_pipe_path)) {
     strncpy(result, "0", sizeof(result));
-    kvs_print_notif_pipes(key);
   } else {
     strncpy(result, "1", sizeof(result));
   }

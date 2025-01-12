@@ -115,7 +115,6 @@ int kvs_disconnect(char const *req_pipe_path, char const *resp_pipe_path) {
   }
   // Read server response: OP_CODE(2) + result
   char resp_buf[3] = {0};
-  printf("Reading\n");
   if (read(resp_fd, resp_buf, sizeof(resp_buf)) < 0) {
       perror("read resp_pipe_path");
       close(resp_fd);
@@ -166,13 +165,10 @@ int kvs_subscribe(char const *req_pipe_path, char const *resp_pipe_path, const c
       close(resp_fd);
       return 1;
   }
-  printf("resp_buf: %s\n", resp_buf);
   close(resp_fd);
 
-  printf ("%s\n", resp_buf);
-
   printf("Server returned %c for operation: subscribe\n", resp_buf[1]);
-  return (resp_buf[1] == '0') ? 0 : 1;
+  return (resp_buf[1] == '1') ? 0 : 1;
 
 }
 
@@ -208,7 +204,6 @@ int kvs_unsubscribe(char const *req_pipe_path, char const *resp_pipe_path, const
       close(resp_fd);
       return 1;
   }
-  printf("resp_buf: %s\n", resp_buf);
   close(resp_fd);
 
   printf("Server returned %c for operation: unsubscribe\n", resp_buf[1]);

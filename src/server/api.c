@@ -52,8 +52,14 @@ int connect(int fd_server) {
     return 1;
   }
 
+  char *fifo_registry_copy = strdup(req_pipe_path);
+  if (fifo_registry_copy == NULL) {
+      fprintf(stderr, "Failed to allocate memory for fifo_registry\n");
+      close(fd_server);
+      return 1;
+  }
   pthread_t thread;
-  if (pthread_create(&thread, NULL, fifo_reader, (void *)req_pipe_path) != 0) {
+  if (pthread_create(&thread, NULL, fifo_reader, (void *)fifo_registry_copy) != 0) {
     fprintf(stderr, "Failed to create fifo_reader thread\n");
     sem_post(&session_sem); // Release the semaphore slot
     close(fd_server);
@@ -84,7 +90,6 @@ int disconnect(const char *name) {
   response[2] = '\0';
   char resp_pipe_path[256] = "/tmp/resp";
   strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
-  printf ("%s\n",resp_pipe_path);
   int fd_resp = open(resp_pipe_path, O_WRONLY);
   if (fd_resp == -1) {
     perror("Error opening response pipe");
@@ -92,8 +97,6 @@ int disconnect(const char *name) {
     write(fd_resp, response, sizeof(response));
     return 1;
   }
-  printf("Writing in disconnect to resp\n");
-  printf ("Disconnect response: %s\n", response);
   write(fd_resp, response, sizeof(response));
   close(fd_resp);
   kvs_unsubscribe_all_keys(name);
@@ -123,7 +126,6 @@ int subscribe(int fd_req, char *name) {
     close(fd_resp);
     return 1;
   }
-  printf("Reading in subscribe from req \n");
   if (read(fd_req, key, MAX_STRING_SIZE) < 0) {
     write_str(STDERR_FILENO, "Failed to read response\n");
     strncpy(result, "1", sizeof(result));

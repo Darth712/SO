@@ -41,7 +41,6 @@ void *fifo_reader (void *arg) {
   //pthread_mutex_lock(&lock);
   char *fifo_registry = (char *)arg;
   char *name = client_name(fifo_registry);
-  printf("%s\n",name);
   fflush(stdout);
   while (1) {
     int fd = open(fifo_registry, O_RDONLY);
@@ -61,26 +60,22 @@ void *fifo_reader (void *arg) {
  
     switch (opcode) {
       case OP_CODE_CONNECT:
-        printf("Connecting\n");
         if(connect(fd)){
           write_str(STDERR_FILENO, "Failed to connect to server\n");
         }
         
         break;
       case OP_CODE_DISCONNECT:
-        printf("Disconnecting\n");
         if (disconnect(name + 3)) {
           write_str(STDERR_FILENO, "Failed to disconnect\n");
         }
         break;
       case OP_CODE_SUBSCRIBE:
-        printf("Subscribing\n");
         if (subscribe(fd,name + 3)) {
           write_str(STDERR_FILENO, "Failed to subscribe\n");
         }
         break;
       case OP_CODE_UNSUBSCRIBE:
-        printf("Unsubscribing\n");
         if (unsubscribe(fd,name + 3)) {
           write_str(STDERR_FILENO, "Failed to unsubscribe\n");
         }
@@ -92,6 +87,5 @@ void *fifo_reader (void *arg) {
 
     close(fd);
   }
-  printf("exiting\n");
   return NULL;
 }

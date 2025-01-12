@@ -74,7 +74,6 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE],
         } else {
             snprintf(message, MAX_STRING_SIZE, "(<%s>,<null>)", keys[i]); // Handle null case
         }
-        printf ("%s\n",new_value);
         kvs_notify(keys[i], message);
         free(new_value);
 
@@ -122,6 +121,7 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
 
   int aux = 0;
   for (size_t i = 0; i < num_pairs; i++) {
+
     if (delete_pair(kvs_table, keys[i]) != 0) {
       if (!aux) {
         write_str(fd, "[");
@@ -130,10 +130,6 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
       char str[MAX_STRING_SIZE];
       snprintf(str, MAX_STRING_SIZE, "(%s,KVSMISSING)", keys[i]);
       write_str(fd, str);
-    } else {
-      char *message[MAX_STRING_SIZE];
-      snprintf(*message,strlen(*message)* sizeof(char),"(<%s>,DELETED)",keys[i]);
-      kvs_notify(keys[i], *message);
     }
   }
   if (aux) {
@@ -334,7 +330,7 @@ void kvs_print_notif_pipes(const char *key) {
         if (strcmp(keyNode->key, key) == 0) {
             printf("Notification pipes for key: %s\n", key);
             for (int i = 0; i < keyNode->notif_pipe_count; i++) {
-                printf("  [%d] %s\n", i, keyNode->notif_pipe_paths[i]);
+                printf("[%d] %s\n", i, keyNode->notif_pipe_paths[i]);
             }
             pthread_rwlock_unlock(&kvs_table->tablelock);
             return;
@@ -462,19 +458,19 @@ void close_all_fifos() {
 int kvs_notify(const char *key, char message[MAX_STRING_SIZE]) {
     KeyNode *keyNode = kvs_table->table[hash(key)];
     while (keyNode) {
-        if (strcmp(keyNode->key, key) == 0) {
-            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
-                if (keyNode->notif_pipe_paths[i] != NULL) {
-                  int fd = open(keyNode->notif_pipe_paths[i], O_WRONLY);
-                  if (fd != -1) {
-                    write(fd, message, strlen(message));
-                    close(fd);
-                  }
-                }
+      if (strcmp(keyNode->key, key) == 0) {
+        for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+          if (keyNode->notif_pipe_paths[i] != NULL) {
+            int fd = open(keyNode->notif_pipe_paths[i], O_WRONLY);
+            if (fd != -1) {
+              write(fd, message, strlen(message));
+              close(fd);
             }
-            break;
+          }
         }
-        keyNode = keyNode->next;
+        break;
+      }
+      keyNode = keyNode->next;
     }
     return 0;
 }

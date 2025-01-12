@@ -1,7 +1,10 @@
 #include "kvs.h"
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include "string.h"
+#include "constants.h"
+#include "operations.h"
 
 // Hash function based on key initial.
 // @param key Lowercase alphabetical string.
@@ -83,6 +86,9 @@ int delete_pair(HashTable *ht, const char *key) {
 
   while (keyNode != NULL) {
     if (strcmp(keyNode->key, key) == 0) {
+      char message[MAX_STRING_SIZE]; // Single buffer for the message
+      snprintf(message, MAX_STRING_SIZE, "(<%s>,DELETED)", key); 
+      kvs_notify(key, message);
       // Key found; delete this node
       if (prevNode == NULL) {
         // Node to delete is the first node in the list

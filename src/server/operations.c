@@ -126,7 +126,7 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
       write_str(fd, str);
     } else {
       char *message[MAX_STRING_SIZE];
-      snprintf(*message,strlen(*message)* sizeof(char),"(<%s>,DELETED",keys[i]);
+      snprintf(*message,strlen(*message)* sizeof(char),"(<%s>,DELETED)",keys[i]);
       kvs_notify(keys[i], *message);
     }
   }

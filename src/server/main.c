@@ -298,9 +298,6 @@ static void dispatch_threads(DIR *dir,const char *fifo_registry) {
   pthread_create(&receiver_thread, NULL, fifo_reader, (void *)fifo_registry);
   pthread_join(receiver_thread, NULL);
 
-  // for (size_t i = 0; i < MAX_SESSION_COUNT; i++) {
-  //  pthread_create(&receiver_thread, NULL, fifo_reader, (void *)fifo_registry);
-  // }
 
   for (unsigned int i = 0; i < max_threads; i++) {
     if (pthread_join(threads[i], NULL) != 0) {

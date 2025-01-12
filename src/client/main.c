@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
   char req_pipe_path[256] = "/tmp/req";
   char resp_pipe_path[256] = "/tmp/resp";
   char notif_pipe_path[256] = "/tmp/notif";
-
+  char server_pipe_path[256] = "../server/";
   char keys[MAX_NUMBER_SUB][MAX_STRING_SIZE] = {0};
   unsigned int delay_ms;
   size_t num;
@@ -70,6 +70,7 @@ int main(int argc, char *argv[]) {
   strncat(req_pipe_path, argv[1], strlen(argv[1]) * sizeof(char));
   strncat(resp_pipe_path, argv[1], strlen(argv[1]) * sizeof(char));
   strncat(notif_pipe_path, argv[1], strlen(argv[1]) * sizeof(char));
+  strncat(server_pipe_path, argv[2], strlen(argv[2]) * sizeof(char));
 
 
   if(strlen(argv[2]) < 0 || strlen(argv[2]) > MAX_PIPE_PATH_LENGTH) {
@@ -77,7 +78,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  if (kvs_connect(req_pipe_path, resp_pipe_path, argv[2], notif_pipe_path, NULL) != 0) {
+  if (kvs_connect(req_pipe_path, resp_pipe_path, server_pipe_path, notif_pipe_path, NULL) != 0) {
     fprintf(stderr, "Failed to connect to the server\n");
     return 1;
   }

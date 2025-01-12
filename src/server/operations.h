@@ -54,6 +54,10 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char *notif_pipe_path);
 
 int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path);
 
+void kvs_unsubscribe_all_keys(const char *client_name);
+
+int kvs_notify(const char *key, const char *notif);
+
 void kvs_print_notif_pipes(const char *key);
 
 // Setter for max_backups

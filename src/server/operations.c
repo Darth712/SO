@@ -48,13 +48,25 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE],
     fprintf(stderr, "KVS state must be initialized\n");
     return 1;
   }
-
   pthread_rwlock_wrlock(&kvs_table->tablelock);
+  
 
   for (size_t i = 0; i < num_pairs; i++) {
+    char *old_value = read_pair(kvs_table, keys[i]);
     if (write_pair(kvs_table, keys[i], values[i]) != 0) {
       fprintf(stderr, "Failed to write key pair (%s,%s)\n", keys[i], values[i]);
     }
+    else {
+      if (!old_value || strcmp(old_value, values[i]) != 0) {
+        char *message[MAX_STRING_SIZE * 2 + 2];
+        char *new_value = read_pair(kvs_table, keys[i]);
+        snprintf(*message,strlen(*message) * sizeof(char),"(<%s>,<%s>",keys[i],new_value);
+        kvs_notify(keys[i], *message);
+        free(new_value);
+
+      }
+    }
+    free(old_value);
   }
 
   pthread_rwlock_unlock(&kvs_table->tablelock);
@@ -92,7 +104,6 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
     fprintf(stderr, "KVS state must be initialized\n");
     return 1;
   }
-
   pthread_rwlock_wrlock(&kvs_table->tablelock);
 
   int aux = 0;
@@ -105,6 +116,10 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
       char str[MAX_STRING_SIZE];
       snprintf(str, MAX_STRING_SIZE, "(%s,KVSMISSING)", keys[i]);
       write_str(fd, str);
+    } else {
+      char *message[MAX_STRING_SIZE * 2 + 2];
+      snprintf(*message,strlen(*message)* sizeof(char),"(<%s>,DELETED",keys[i]);
+      kvs_notify(keys[i], *message);
     }
   }
   if (aux) {
@@ -304,4 +319,62 @@ void kvs_print_notif_pipes(const char *key) {
     }
     pthread_rwlock_unlock(&kvs_table->tablelock);
     printf("No notification pipes found for key: %s\n", key);
+}
+
+// Consider calling this in your disconnect() function
+void kvs_unsubscribe_all_keys(const char *client_name) {
+    // Acquire a write lock to modify the table
+    pthread_rwlock_wrlock(&kvs_table->tablelock);
+    
+    for (int i = 0; i < TABLE_SIZE; i++) {
+        KeyNode *keyNode = kvs_table->table[i];
+
+        while (keyNode) {
+            int j = 0;
+            // Iterate all pipes in this keyNode
+            while (j < keyNode->notif_pipe_count) {
+                // If pipe matches client_name (substring check or exact match)
+                if (strstr(keyNode->notif_pipe_paths[j], client_name)) {
+                    // Free the string
+                    free(keyNode->notif_pipe_paths[j]);
+                    
+                    // Shift the rest left
+                    for (int k = j; k < keyNode->notif_pipe_count - 1; k++) {
+                        keyNode->notif_pipe_paths[k] = keyNode->notif_pipe_paths[k + 1];
+                    }
+                    keyNode->notif_pipe_count--;
+                } else {
+                    j++;
+                }
+            }
+            // If the list is empty, free the array
+            if (keyNode->notif_pipe_count == 0) {
+                free(keyNode->notif_pipe_paths);
+                keyNode->notif_pipe_paths = NULL;
+            }
+            keyNode = keyNode->next;
+        }
+    }
+    
+    pthread_rwlock_unlock(&kvs_table->tablelock);
+}
+
+int kvs_notify(const char *key, const char *message) {
+    KeyNode *keyNode = kvs_table->table[hash(key)];
+    while (keyNode) {
+        if (strcmp(keyNode->key, key) == 0) {
+            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+                if (keyNode->notif_pipe_paths[i] != NULL) {
+                  int fd = open(keyNode->notif_pipe_paths[i], O_WRONLY);
+                  if (fd != -1) {
+                    write(fd, message, strlen(message));
+                    close(fd);
+                  }
+                }
+            }
+            break;
+        }
+        keyNode = keyNode->next;
+    }
+    return 0;
 }

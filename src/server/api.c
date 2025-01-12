@@ -91,6 +91,7 @@ int disconnect(const char *name) {
   printf ("Disconnect response: %s\n", response);
   write(fd_resp, response, sizeof(response));
   close(fd_resp);
+  kvs_unsubscribe_all_keys(name);
   // free (thread)
   pthread_mutex_lock(&session_mutex);
   session_count--;
@@ -123,7 +124,7 @@ int subscribe(int fd_req, char *name) {
     return 1;
   }
 
-  if (kvs_subscribe(key,notif_pipe_path,name)) {
+  if (kvs_subscribe(key,notif_pipe_path)) {
     strncpy(result, "0", sizeof(result));
     kvs_print_notif_pipes(key);
   } else {
@@ -164,7 +165,7 @@ int unsubscribe (int fd_req, char *name) {
     return 1;
   }
 
-  if (kvs_unsubscribe(key,notif_pipe_path,name)) {
+  if (kvs_unsubscribe(key,notif_pipe_path)) {
     strncpy(result, "0", sizeof(result));
     kvs_print_notif_pipes(key);
   } else {

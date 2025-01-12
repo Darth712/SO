@@ -52,6 +52,7 @@ void *fifo_reader (void *arg) {
         if(connect(fd)){
           write_str(STDERR_FILENO, "Failed to connect to server\n");
         }
+        
         break;
       case OP_CODE_DISCONNECT:
         printf("Disconnecting\n");

@@ -28,6 +28,7 @@ void *fifo_reader (void *arg) {
   //pthread_mutex_lock(&lock);
   char *fifo_registry = (char *)arg;
   char *name = client_name(fifo_registry);
+  printf("%s\n",name);
   fflush(stdout);
   while (1) {
     int fd = open(fifo_registry, O_RDONLY);

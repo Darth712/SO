@@ -76,17 +76,20 @@ int connect (int fd_server) {
 
 int disconnect(const char *name) {
   char response [3] = {0};
+  response[0] = '2';
   response[1] = '0';
+  response[2] = '\0';
   char resp_pipe_path[256] = "/tmp/resp";
   strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
+  printf ("%s\n",resp_pipe_path);
   int fd_resp = open(resp_pipe_path, O_WRONLY);
   if (fd_resp == -1) {
     perror("Error opening response pipe");
     response[1] = '1';
+    write(fd_resp, response, sizeof(response));
     return 1;
   }
-  response[0] = '2';
-  response[2] = '\0';
+  printf("Writing\n");
   printf ("Disconnect response: %s\n", response);
   write(fd_resp, response, sizeof(response));
   close(fd_resp);
@@ -96,6 +99,7 @@ int disconnect(const char *name) {
   session_count--;
   pthread_cond_signal(&session_cond);
   pthread_mutex_unlock(&session_mutex);
+  return 0;
 }
 
 int subscribe(int fd_req, char *name) {
@@ -114,7 +118,7 @@ int subscribe(int fd_req, char *name) {
     close(fd_resp);
     return 1;
   }
-
+  printf("Reading\n");
   if (read(fd_req, key, MAX_STRING_SIZE) < 0) {
     write_str(STDERR_FILENO, "Failed to read response\n");
     strncpy(result, "1", sizeof(result));

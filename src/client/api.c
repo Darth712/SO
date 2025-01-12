@@ -115,6 +115,7 @@ int kvs_disconnect(char const *req_pipe_path, char const *resp_pipe_path) {
   }
   // Read server response: OP_CODE(2) + result
   char resp_buf[3] = {0};
+  printf("Reading\n");
   if (read(resp_fd, resp_buf, sizeof(resp_buf)) < 0) {
       perror("read resp_pipe_path");
       close(resp_fd);

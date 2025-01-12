@@ -8,6 +8,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <semaphore.h>
+#include <signal.h>
 #include "constants.h"
 #include "io.h"
 #include "operations.h"
@@ -18,6 +20,7 @@
 #include "../common/constants.h"
 #include "fifo.h"
 #include "api.h"
+
 
 struct SharedData {
   DIR *dir;
@@ -32,6 +35,27 @@ size_t active_backups = 0; // Number of active backups
 size_t max_backups;        // Maximum allowed simultaneous backups
 size_t max_threads;        // Maximum allowed simultaneous threads
 char *jobs_directory = NULL;
+sem_t session_sem;
+
+volatile sig_atomic_t sigusr1_received = 0;
+
+// Signal handler for SIGUSR1
+void handle_sigusr1(int signum) {
+    sigusr1_received = 1;
+}
+
+// Function to set up the SIGUSR1 handler
+void setup_signal_handler() {
+    struct sigaction sa;
+    sa.sa_handler = handle_sigusr1;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    if (sigaction(SIGUSR1, &sa, NULL) == -1) {
+        perror("Error setting up SIGUSR1 handler");
+        exit(EXIT_FAILURE);
+    }
+}
 
 int filter_job_files(const struct dirent *entry) {
   const char *dot = strrchr(entry->d_name, '.');
@@ -334,6 +358,30 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  setup_signal_handler();
+
+  if (sem_init(&session_sem, 0, MAX_SESSION_COUNT) != 0) {
+    perror("Failed to initialize semaphore");
+    return 1;
+  }
+
+  // Block SIGUSR1 in all threads by default
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0) {
+    perror("Failed to block SIGUSR1");
+    return 1;
+  }
+
+  // Allow only the main thread to receive SIGUSR1
+  // Restore signal mask for the main thread
+  if (pthread_sigmask(SIG_UNBLOCK, &set, NULL) != 0) {
+    perror("Failed to unblock SIGUSR1 for main thread");
+    return 1;
+  }
+
+
   DIR *dir = opendir(argv[1]);
   if (dir == NULL) {
     fprintf(stderr, "Failed to open directory: %s\n", argv[1]);
@@ -347,6 +395,17 @@ int main(int argc, char **argv) {
   if (closedir(dir) == -1) {
     fprintf(stderr, "Failed to close directory\n");
     return 0;
+  }
+
+  while (1) {
+  if (sigusr1_received) {
+    printf("SIGUSR1 received. Cleaning up subscriptions and closing FIFOs.\n");
+    kvs_subscription_terminate(); // Implement this function accordingly
+    sigusr1_received = 0;        // Reset the flag
+  }
+
+    // Other server operations...
+    sleep(1); // Prevent busy-waiting
   }
 
   while (active_backups > 0) {

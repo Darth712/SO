@@ -7,12 +7,15 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include <semaphore.h>
 
 #include "constants.h"
 #include "io.h"
 #include "kvs.h"
+#include "fifo.h"
 
 static struct HashTable *kvs_table = NULL;
+extern sem_t session_sem;
 
 /// Calculates a timespec from a delay in milliseconds.
 /// @param delay_ms Delay in milliseconds.
@@ -39,6 +42,11 @@ int kvs_terminate() {
 
   free_table(kvs_table);
   kvs_table = NULL;
+  // Destroy the semaphore
+  if (sem_destroy(&session_sem) != 0) {
+    perror("Failed to destroy semaphore");
+    return 1;
+  }
   return 0;
 }
 
@@ -366,6 +374,82 @@ void kvs_unsubscribe_all_keys(const char *client_name) {
         }
     }
     
+    pthread_rwlock_unlock(&kvs_table->tablelock);
+}
+
+// Function to unsubscribe all keys from the KVS
+void kvs_subscription_terminate() {
+    // Acquire a write lock to modify the hashtable
+    pthread_rwlock_wrlock(&kvs_table->tablelock);
+    
+    // Iterate over each bucket in the hashtable
+    for (int i = 0; i < TABLE_SIZE; i++) {
+        KeyNode *keyNode = kvs_table->table[i];
+        
+        // Traverse the linked list of KeyNodes in the current bucket
+        while (keyNode) {
+            // Iterate through all notification pipes for the current key
+            for (int j = 0; j < keyNode->notif_pipe_count; j++) {
+                // Attempt to open the notification pipe in write-only mode
+                int fd = open(keyNode->notif_pipe_paths[j], O_WRONLY);
+                if (fd != -1) {
+                    // Close the pipe to signal the client
+                    close(fd);
+                    char *name = client_name(keyNode->notif_pipe_paths[j]);
+                    char resp_pipe_path[256] = "/tmp/resp";
+                    char req_pipe_path[256] = "/tmp/req";
+                    strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
+                    strncpy(req_pipe_path + 8, name, strlen(name) * sizeof(char));
+                    int fd_resp = open(resp_pipe_path, O_WRONLY);
+                    if (fd_resp != -1) close(fd_resp);
+                    int fd_req = open(req_pipe_path, O_WRONLY);
+                    if (fd_req != -1) close(fd_req);
+                } else {
+                    // If opening fails, log the error (pipe might already be closed)
+                    perror("Error closing notification pipe");
+                }
+
+                // Free the memory allocated for the notification pipe path
+                free(keyNode->notif_pipe_paths[j]);
+                keyNode->notif_pipe_paths[j] = NULL;
+            }
+
+            // Free the array of notification pipe paths
+            free(keyNode->notif_pipe_paths);
+            keyNode->notif_pipe_paths = NULL;
+            // Reset the notification pipe count
+            keyNode->notif_pipe_count = 0;
+
+            // Move to the next KeyNode in the linked list
+            keyNode = keyNode->next;
+        }
+    }
+    
+    // Release the write lock
+    pthread_rwlock_unlock(&kvs_table->tablelock);
+}
+
+// Function to close all FIFOs (response and notification)
+void close_all_fifos() {
+    pthread_rwlock_rdlock(&kvs_table->tablelock);
+
+    for (int i = 0; i < TABLE_SIZE; i++) {
+        KeyNode *keyNode = kvs_table->table[i];
+        while (keyNode) {
+            // Close all notification FIFOs
+            for (int j = 0; j < keyNode->notif_pipe_count; j++) {
+                close(open(keyNode->notif_pipe_paths[j], O_WRONLY));
+            }
+
+            // Assuming you store resp_pipe_paths similarly
+            // If not, implement accordingly
+            // Example:
+            // close(open(keyNode->resp_pipe_path, O_WRONLY));
+
+            keyNode = keyNode->next;
+        }
+    }
+
     pthread_rwlock_unlock(&kvs_table->tablelock);
 }
 

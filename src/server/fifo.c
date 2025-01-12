@@ -24,7 +24,20 @@ char *client_name(const char *client_fifo) {
     return (last_slash != NULL) ? (char *)(last_slash + 1) : (char *)client_fifo;
 }
 
+// Function to block SIGUSR1 in client threads
+void block_sigusr1() {
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0) {
+    perror("Failed to block SIGUSR1 in client thread");
+    pthread_exit(NULL);
+  }
+}
+
 void *fifo_reader (void *arg) {
+  // First, block SIGUSR1
+  block_sigusr1();
   //pthread_mutex_lock(&lock);
   char *fifo_registry = (char *)arg;
   char *name = client_name(fifo_registry);

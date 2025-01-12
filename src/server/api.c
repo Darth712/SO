@@ -8,6 +8,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <semaphore.h>
 #include "constants.h"
 #include "io.h"
 #include "operations.h"
@@ -23,10 +24,12 @@
 const int s = MAX_SESSION_COUNT;
 int session_count = 0;
 
+extern sem_t session_sem;
+
 static pthread_mutex_t session_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t session_cond = PTHREAD_COND_INITIALIZER;
 
-int connect (int fd_server) {
+int connect(int fd_server) {
   // Initialize buffers
   char total_pipe_path[MAX_PIPE_PATH_LENGTH *3 + 1] = {0};
   char req_pipe_path[MAX_PIPE_PATH_LENGTH] = {0};
@@ -43,19 +46,19 @@ int connect (int fd_server) {
   strncpy(req_pipe_path, total_pipe_path, sizeof(req_pipe_path) - 1);
   strncpy(resp_pipe_path, total_pipe_path + MAX_PIPE_PATH_LENGTH, sizeof(resp_pipe_path) - 1);
   strncpy(notif_pipe_path, total_pipe_path + 2 * MAX_PIPE_PATH_LENGTH, sizeof(notif_pipe_path) - 1);
-  pthread_t *thread = malloc(sizeof(pthread_t));
-  if (thread == NULL) {
-    fprintf(stderr, "Failed to allocate memory for threads\n");
+  if (sem_wait(&session_sem) != 0) {
+    perror("sem_wait failed");
+    close(fd_server);
     return 1;
   }
-  pthread_mutex_lock(&session_mutex);
-  while (session_count >= s) {
-    // Wait for a signal that a session slot is freed
-    pthread_cond_wait(&session_cond, &session_mutex);
+
+  pthread_t thread;
+  if (pthread_create(&thread, NULL, fifo_reader, (void *)req_pipe_path) != 0) {
+    fprintf(stderr, "Failed to create fifo_reader thread\n");
+    sem_post(&session_sem); // Release the semaphore slot
+    close(fd_server);
+    return 1;
   }
-  session_count++;
-  pthread_mutex_unlock(&session_mutex);
-  pthread_create(&thread[0], NULL, fifo_reader, (void *)&req_pipe_path);
   int fd_resp = open(resp_pipe_path, O_WRONLY);
   if (fd_resp == -1) {
     perror("Error opening response pipe");
@@ -89,16 +92,18 @@ int disconnect(const char *name) {
     write(fd_resp, response, sizeof(response));
     return 1;
   }
-  printf("Writing\n");
+  printf("Writing in disconnect to resp\n");
   printf ("Disconnect response: %s\n", response);
   write(fd_resp, response, sizeof(response));
   close(fd_resp);
   kvs_unsubscribe_all_keys(name);
   // free (thread)
-  pthread_mutex_lock(&session_mutex);
-  session_count--;
-  pthread_cond_signal(&session_cond);
-  pthread_mutex_unlock(&session_mutex);
+  if (sem_post(&session_sem) != 0) {
+    perror("sem_post failed");
+    response[1] = '1';
+    write(fd_resp, response, sizeof(response));
+    return 1;
+  }
   return 0;
 }
 
@@ -118,7 +123,7 @@ int subscribe(int fd_req, char *name) {
     close(fd_resp);
     return 1;
   }
-  printf("Reading\n");
+  printf("Reading in subscribe from req \n");
   if (read(fd_req, key, MAX_STRING_SIZE) < 0) {
     write_str(STDERR_FILENO, "Failed to read response\n");
     strncpy(result, "1", sizeof(result));

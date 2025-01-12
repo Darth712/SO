@@ -1,7 +1,6 @@
 #include "kvs.h"
 #include <ctype.h>
 #include <stdlib.h>
-#include "subscriptions.h"
 #include "string.h"
 
 // Hash function based on key initial.

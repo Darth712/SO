@@ -16,7 +16,6 @@
 #include "../common/protocol.h"
 #include "../common/io.h"
 #include "../common/constants.h"
-#include "subscriptions.h"
 #include "fifo.h"
 #include "kvs.h"
 #include "operations.h"

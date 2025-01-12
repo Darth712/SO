@@ -58,7 +58,7 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE],
     }
     else {
       if (!old_value || strcmp(old_value, values[i]) != 0) {
-        char *message[MAX_STRING_SIZE * 2 + 2];
+        char *message[MAX_STRING_SIZE];
         char *new_value = read_pair(kvs_table, keys[i]);
         snprintf(*message,strlen(*message) * sizeof(char),"(<%s>,<%s>",keys[i],new_value);
         kvs_notify(keys[i], *message);
@@ -117,7 +117,7 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
       snprintf(str, MAX_STRING_SIZE, "(%s,KVSMISSING)", keys[i]);
       write_str(fd, str);
     } else {
-      char *message[MAX_STRING_SIZE * 2 + 2];
+      char *message[MAX_STRING_SIZE];
       snprintf(*message,strlen(*message)* sizeof(char),"(<%s>,DELETED",keys[i]);
       kvs_notify(keys[i], *message);
     }
@@ -202,6 +202,16 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path) {
     KeyNode *keyNode = kvs_table->table[hash(key)];
     while (keyNode != NULL) {
         if (strcmp(keyNode->key, key) == 0) {
+            
+            // Check if notif_pipe_path already exists
+            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+                if (strcmp(keyNode->notif_pipe_paths[i], notif_pipe_path) == 0) {
+                    // Already subscribed
+                    pthread_rwlock_unlock(&kvs_table->tablelock);
+                    return 0;
+                }
+            }
+
             // Duplicate notif_pipe_path
             char *notif_pipe = strdup(notif_pipe_path);
             if (!notif_pipe) {
@@ -232,7 +242,7 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path) {
                 free(old_paths);
             }
 
-            // Add the new path at the end
+            // Add the new path
             keyNode->notif_pipe_paths[keyNode->notif_pipe_count] = notif_pipe;
             keyNode->notif_pipe_count++;
 

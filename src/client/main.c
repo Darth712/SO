@@ -10,10 +10,6 @@
 #include "../common/constants.h"
 #include "../common/io.h"
 
-static void* notification_handler(void* arg) {
-    char* notif_path = (char*)arg;
-
-
 /*
   // Read server response: OP_CODE(1) + result
   char resp_buf[2];
@@ -31,6 +27,8 @@ static void* notification_handler(void* arg) {
   return (resp_buf[1] == 0) ? 0 : 1;
 */
 
+static void* notification_handler(void* arg) {
+    char* notif_path = (char*)arg;
 
     while (1) {
         char buffer[MAX_STRING_SIZE];
@@ -78,12 +76,12 @@ int main(int argc, char *argv[]) {
   strncat(server_pipe_path, argv[2], strlen(argv[2]) * sizeof(char));
 
 
-  if(strlen(argv[2]) < 0 || strlen(argv[2]) > MAX_PIPE_PATH_LENGTH) {
+  if(strlen(argv[2]) < 1 || strlen(argv[2]) > MAX_PIPE_PATH_LENGTH) {
     fprintf(stderr, "Invalid register pipe path\n");
     return 1;
   }
 
-  if (kvs_connect(req_pipe_path, resp_pipe_path, server_pipe_path, notif_pipe_path, NULL) != 0) {
+  if (kvs_connect(req_pipe_path, resp_pipe_path, server_pipe_path, notif_pipe_path) != 0) {
     fprintf(stderr, "Failed to connect to the server\n");
     return 1;
   }

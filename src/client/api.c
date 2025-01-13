@@ -16,8 +16,7 @@ static char s_notif_pipe_path[MAX_PIPE_PATH_LENGTH];
 
 
 int kvs_connect(char const *req_pipe_path, char const *resp_pipe_path,
-                char const *server_pipe_path, char const *notif_pipe_path,
-                int *notif_pipe) {
+                char const *server_pipe_path, char const *notif_pipe_path) {
   
   strncpy(s_req_pipe_path, req_pipe_path, sizeof(s_req_pipe_path)-1);
   strncpy(s_resp_pipe_path, resp_pipe_path, sizeof(s_resp_pipe_path)-1); 

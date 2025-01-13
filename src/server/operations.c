@@ -13,6 +13,7 @@
 #include "io.h"
 #include "kvs.h"
 #include "fifo.h"
+#include "api.h"
 
 static struct HashTable *kvs_table = NULL;
 extern sem_t session_sem;
@@ -68,7 +69,6 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE],
       if (!old_value || strcmp(old_value, values[i]) != 0) {
         char message[MAX_STRING_SIZE]; // Single buffer for the message
         char *new_value = read_pair(kvs_table, keys[i]); // Assume this returns a valid string
-
         if (new_value) { // Check if read_pair returned a valid value
             snprintf(message, MAX_STRING_SIZE, "(<%s>,<%s>)", keys[i], new_value);
         } else {
@@ -214,7 +214,7 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path) {
         if (strcmp(keyNode->key, key) == 0) {
             
             // Check if notif_pipe_path already exists
-            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+            for (size_t i = 0; i < keyNode->notif_pipe_count; i++) {
                 if (strcmp(keyNode->notif_pipe_paths[i], notif_pipe_path) == 0) {
                     // Already subscribed
                     pthread_rwlock_unlock(&kvs_table->tablelock);
@@ -243,7 +243,7 @@ int kvs_subscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path) {
             }
 
             // Copy old pointers to new array
-            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+            for (size_t i = 0; i < keyNode->notif_pipe_count; i++) {
                 keyNode->notif_pipe_paths[i] = old_paths[i];
             }
 
@@ -272,9 +272,9 @@ int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path) {
         if (strcmp(keyNode->key, key) == 0) {
             // Find the index of the pipe to remove
             int remove_index = -1;
-            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+            for (size_t i = 0; i < keyNode->notif_pipe_count; i++) {
                 if (strcmp(keyNode->notif_pipe_paths[i], notif_pipe_path) == 0) {
-                    remove_index = i;
+                    remove_index = (int)i;
                     break;
                 }
             }
@@ -308,8 +308,8 @@ int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path) {
                 return 0;
             }
             int j = 0;
-            for (int i = 0; i < keyNode->notif_pipe_count + 1; i++) {
-                if (i != remove_index) {
+            for (size_t i = 0; i < keyNode->notif_pipe_count + 1; i++) {
+                if ((int)i != remove_index) {
                     keyNode->notif_pipe_paths[j++] = old_paths[i];
                 }
             }
@@ -323,24 +323,6 @@ int kvs_unsubscribe(char key[MAX_STRING_SIZE], const char* notif_pipe_path) {
     return 0; // Key not found
 }
 
-void kvs_print_notif_pipes(const char *key) {
-    pthread_rwlock_rdlock(&kvs_table->tablelock);
-    KeyNode *keyNode = kvs_table->table[hash(key)];
-    while (keyNode) {
-        if (strcmp(keyNode->key, key) == 0) {
-            printf("Notification pipes for key: %s\n", key);
-            for (int i = 0; i < keyNode->notif_pipe_count; i++) {
-                printf("[%d] %s\n", i, keyNode->notif_pipe_paths[i]);
-            }
-            pthread_rwlock_unlock(&kvs_table->tablelock);
-            return;
-        }
-        keyNode = keyNode->next;
-    }
-    pthread_rwlock_unlock(&kvs_table->tablelock);
-    printf("No notification pipes found for key: %s\n", key);
-}
-
 // Consider calling this in your disconnect() function
 void kvs_unsubscribe_all_keys(const char *client_name) {
     // Acquire a write lock to modify the table
@@ -350,7 +332,7 @@ void kvs_unsubscribe_all_keys(const char *client_name) {
         KeyNode *keyNode = kvs_table->table[i];
 
         while (keyNode) {
-            int j = 0;
+            size_t j = 0;
             // Iterate all pipes in this keyNode
             while (j < keyNode->notif_pipe_count) {
                 // If pipe matches client_name (substring check or exact match)
@@ -359,7 +341,7 @@ void kvs_unsubscribe_all_keys(const char *client_name) {
                     free(keyNode->notif_pipe_paths[j]);
                     
                     // Shift the rest left
-                    for (int k = j; k < keyNode->notif_pipe_count - 1; k++) {
+                    for (size_t k = j; k < keyNode->notif_pipe_count - 1; k++) {
                         keyNode->notif_pipe_paths[k] = keyNode->notif_pipe_paths[k + 1];
                     }
                     keyNode->notif_pipe_count--;
@@ -390,22 +372,18 @@ void kvs_subscription_terminate() {
         
         // Traverse the linked list of KeyNodes in the current bucket
         while (keyNode) {
+            printf("Unsubscribing from all keys\n");
             // Iterate through all notification pipes for the current key
-            for (int j = 0; j < keyNode->notif_pipe_count; j++) {
+            for (size_t j = 0; j < keyNode->notif_pipe_count; j++) {
                 // Attempt to open the notification pipe in write-only mode
                 int fd = open(keyNode->notif_pipe_paths[j], O_WRONLY);
                 if (fd != -1) {
                     // Close the pipe to signal the client
                     close(fd);
                     char *name = client_name(keyNode->notif_pipe_paths[j]);
-                    char resp_pipe_path[256] = "/tmp/resp";
-                    char req_pipe_path[256] = "/tmp/req";
-                    strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
-                    strncpy(req_pipe_path + 8, name, strlen(name) * sizeof(char));
-                    int fd_resp = open(resp_pipe_path, O_WRONLY);
-                    if (fd_resp != -1) close(fd_resp);
-                    int fd_req = open(req_pipe_path, O_WRONLY);
-                    if (fd_req != -1) close(fd_req);
+                    printf("Unsubscribed from %s\n", name + 5);
+                    disconnect(name + 5);
+                    
                 } else {
                     // If opening fails, log the error (pipe might already be closed)
                     perror("Error closing notification pipe");
@@ -439,7 +417,7 @@ void close_all_fifos() {
         KeyNode *keyNode = kvs_table->table[i];
         while (keyNode) {
             // Close all notification FIFOs
-            for (int j = 0; j < keyNode->notif_pipe_count; j++) {
+            for (size_t j = 0; j < keyNode->notif_pipe_count; j++) {
                 close(open(keyNode->notif_pipe_paths[j], O_WRONLY));
             }
 
@@ -459,10 +437,11 @@ int kvs_notify(const char *key, char message[MAX_STRING_SIZE]) {
     KeyNode *keyNode = kvs_table->table[hash(key)];
     while (keyNode) {
       if (strcmp(keyNode->key, key) == 0) {
-        for (int i = 0; i < keyNode->notif_pipe_count; i++) {
+        for (size_t i = 0; i < keyNode->notif_pipe_count; i++) {
           if (keyNode->notif_pipe_paths[i] != NULL) {
             int fd = open(keyNode->notif_pipe_paths[i], O_WRONLY);
             if (fd != -1) {
+              printf("Sending notification to %s: %s\n", keyNode->notif_pipe_paths[i], message);
               write(fd, message, strlen(message));
               close(fd);
             }

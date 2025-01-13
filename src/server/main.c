@@ -20,7 +20,6 @@
 #include "../common/constants.h"
 #include "fifo.h"
 #include "api.h"
-//idc
 
 struct SharedData {
   DIR *dir;
@@ -42,7 +41,9 @@ volatile sig_atomic_t sigusr1_received = 0;
 // Signal handler for SIGUSR1
 void handle_sigusr1(int signum) {
   if (signum == SIGUSR1) {
-    sigusr1_received = 1;
+    printf("SIGUSR1 received. Cleaning up subscriptions and closing FIFOs.\n");
+    kvs_subscription_terminate();
+    sigusr1_received = 0;
   }
 }
 

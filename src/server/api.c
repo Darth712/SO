@@ -20,166 +20,195 @@
 #include "fifo.h"
 #include "kvs.h"
 #include "operations.h"
+#include "api.h"
+#include "errno.h"
+
+
 
 const int s = MAX_SESSION_COUNT;
-int session_count = 0;
-
 extern sem_t session_sem;
 
-int connect(int fd_server) {
-  // Initialize buffers
-  char total_pipe_path[MAX_PIPE_PATH_LENGTH *3 + 1] = {0};
-  char req_pipe_path[MAX_PIPE_PATH_LENGTH] = {0};
-  char resp_pipe_path[MAX_PIPE_PATH_LENGTH] = {0};
-  char notif_pipe_path[MAX_PIPE_PATH_LENGTH] = {0};
 
-  // Read Request Pipe Path
-  if (read(fd_server, total_pipe_path, MAX_PIPE_PATH_LENGTH * 3 + 1) < 0) {
-      write_str(STDERR_FILENO, "Failed to read req_pipe_path\n");
-      close(fd_server);
-      return 1;
-  }
 
-  strncpy(req_pipe_path, total_pipe_path, sizeof(req_pipe_path) - 1);
-  strncpy(resp_pipe_path, total_pipe_path + MAX_PIPE_PATH_LENGTH, sizeof(resp_pipe_path) - 1);
-  strncpy(notif_pipe_path, total_pipe_path + 2 * MAX_PIPE_PATH_LENGTH, sizeof(notif_pipe_path) - 1);
-  if (sem_wait(&session_sem) != 0) {
-    perror("sem_wait failed");
-    close(fd_server);
+struct Client g_clients[MAX_SESSION_COUNT] = {0}; 
+pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static int write_response(const char *pipe_path, char op_code, char result) {
+    int fd = open(pipe_path, O_WRONLY);
+    if (fd == -1) return 1;
+    
+    char response[3] = {op_code, result + '0', '\0'};
+    write(fd, response, sizeof(response));
+    close(fd);
+    return 0;
+}
+
+
+
+int handle_connection(int fd_server) {
+    char total_pipe_path[MAX_PIPE_PATH_LENGTH * 3 + 1] = {0};
+
+    if (sem_wait(&session_sem) != 0) {
+        perror("sem_wait failed");
+        close(fd_server);
+        return 1;
+    }
+    
+    if (read(fd_server, total_pipe_path, MAX_PIPE_PATH_LENGTH * 3 + 1) < 0) {
+        fprintf(stderr, "[ERROR] Failed to read pipe paths\n");
+        write_response(g_client.resp_pipe, OP_CODE_CONNECT, 1);
+        return 1;
+    }
+
+    pthread_mutex_lock(&clients_mutex);
+    if (g_client.active) {
+        pthread_mutex_unlock(&clients_mutex);
+        fprintf(stderr, "[ERROR] Client already connected\n");
+        return 1;
+    }
+
+    strncpy(g_client.req_pipe, total_pipe_path, MAX_PIPE_PATH_LENGTH);
+    strncpy(g_client.resp_pipe, total_pipe_path + MAX_PIPE_PATH_LENGTH, MAX_PIPE_PATH_LENGTH);
+    strncpy(g_client.notif_pipe, total_pipe_path + (2 * MAX_PIPE_PATH_LENGTH), MAX_PIPE_PATH_LENGTH);
+    g_client.active = 1;
+
+    pthread_mutex_unlock(&clients_mutex);
+
+    printf("[DEBUG] Client pipes configured\n");
+    return write_response(g_client.resp_pipe, OP_CODE_CONNECT, 0);
+}
+
+void *client_handler(void *arg) {
+    struct Client *client = (struct Client *)arg;
+    printf("[DEBUG] Client handler started\n");
+    
+    while (client->active) {
+        int fd = open(client->req_pipe, O_RDONLY);
+        if (fd == -1) {
+            fprintf(stderr, "[ERROR] Failed to open request pipe (errno=%d)\n", errno);
+            continue;
+        }
+
+        char opcode;
+        int interrupted = 0;
+        if (read_all(fd, &opcode, 1, &interrupted) < 0) {
+            fprintf(stderr, "[ERROR] Failed to read opcode (errno=%d)\n", errno);
+            close(fd);
+            continue;
+        }
+
+        printf("[DEBUG] Received opcode: %d\n", opcode);
+        switch(opcode) {
+            case OP_CODE_DISCONNECT:
+                printf("[DEBUG] Processing disconnect\n");
+                client_disconnect(client);
+                close(fd);
+                return NULL;
+            
+            case OP_CODE_SUBSCRIBE:
+                printf("[DEBUG] Processing subscribe\n");
+                handle_subscribe(fd, client);
+                break;
+                
+            case OP_CODE_UNSUBSCRIBE:
+                printf("[DEBUG] Processing unsubscribe\n");
+                handle_unsubscribe(fd, client);
+                break;
+                
+            default:
+                fprintf(stderr, "[ERROR] Unknown opcode: %d\n", opcode);
+        }
+        close(fd);
+    }
+    printf("[DEBUG] Client handler exiting\n");
+    return NULL;
+}
+
+int client_disconnect(struct Client *client) {
+ 
+  if (write_response(client->resp_pipe, OP_CODE_DISCONNECT, 0) != 0) {
     return 1;
   }
 
-  char *fifo_registry_copy = strdup(req_pipe_path);
-  if (fifo_registry_copy == NULL) {
-      fprintf(stderr, "Failed to allocate memory for fifo_registry\n");
-      close(fd_server);
-      return 1;
-  }
-  pthread_t thread;
-  if (pthread_create(&thread, NULL, fifo_reader, (void *)fifo_registry_copy) != 0) {
-    fprintf(stderr, "Failed to create fifo_reader thread\n");
-    sem_post(&session_sem); // Release the semaphore slot
-    close(fd_server);
-    return 1;
-  }
-  int fd_resp = open(resp_pipe_path, O_WRONLY);
-  if (fd_resp == -1) {
-    perror("Error opening response pipe");
-    return 1;
-  }
-
-  // Response to the client
-  char response [3] = {0};
-  response[0] = '1';
-  response[1] = '0';
-  response[2] = '\0';
-  write(fd_resp, response, sizeof(response));
-  close(fd_server);
+  pthread_mutex_lock(&clients_mutex);
+  client->active = 0;
+  kvs_unsubscribe_all_keys(client->notif_pipe);
+  pthread_mutex_unlock(&clients_mutex);
+  
   return 0;
 }
 
-int disconnect(const char *name) {
-  char response [3] = {0};
-  response[0] = '2';
-  response[1] = '0';
-  response[2] = '\0';
-  char resp_pipe_path[256] = "/tmp/resp";
-  strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
-  int fd_resp = open(resp_pipe_path, O_WRONLY);
-  if (fd_resp == -1) {
-    perror("Error opening response pipe");
-    response[1] = '1';
-    write(fd_resp, response, sizeof(response));
-    return 1;
-  }
-  write(fd_resp, response, sizeof(response));
-  close(fd_resp);
-  kvs_unsubscribe_all_keys(name);
-  // free (thread)
-  if (sem_post(&session_sem) != 0) {
-    perror("sem_post failed");
-    response[1] = '1';
-    write(fd_resp, response, sizeof(response));
-    return 1;
-  }
-  return 0;
+
+
+
+int handle_subscribe(int fd_req, struct Client *client) {
+    char key[MAX_STRING_SIZE] = {0};
+    printf("[DEBUG] Starting subscribe operation\n");
+
+    int fd_resp = open(client->resp_pipe, O_WRONLY);
+    if (fd_resp == -1) {
+        fprintf(stderr, "[ERROR] Subscribe: Failed to open response pipe %s (errno=%d)\n", 
+                client->resp_pipe, errno);
+        return 1;
+    }
+    printf("[DEBUG] Opened response pipe: %s\n", client->resp_pipe);
+
+    if (read(fd_req, key, MAX_STRING_SIZE) < 0) {
+        fprintf(stderr, "[ERROR] Subscribe: Failed to read key from request (errno=%d)\n", 
+                errno);
+        write_response(client->resp_pipe, OP_CODE_SUBSCRIBE, 1);
+        close(fd_resp);
+        return 1;
+    }
+    printf("[DEBUG] Read key: %s\n", key);
+
+    if (kvs_subscribe(key, client->notif_pipe)) {
+        printf("[DEBUG] Successfully subscribed to key: %s\n", key);
+        printf("[DEBUG] Using notification pipe: %s\n", client->notif_pipe);
+        kvs_print_notif_pipes(key);
+        
+    write_response(client->resp_pipe, OP_CODE_SUBSCRIBE, 1);
+    } else {
+        fprintf(stderr, "[ERROR] Subscribe: KVS subscription failed for key: %s\n", key);
+    write_response(client->resp_pipe, OP_CODE_SUBSCRIBE, 0);
+    }
+
+    printf("[DEBUG] Subscribe operation completed for key: %s\n", key);
+    close(fd_resp);
+    return 0;
 }
 
-int subscribe(int fd_req, char *name) {
-  char key[MAX_STRING_SIZE];
-  char result[2];
-  char resp_pipe_path[256] = "/tmp/resp";
-  char notif_pipe_path[256] = "/tmp/notif";
-  strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
-  strncpy(notif_pipe_path + 10, name, strlen(name) * sizeof(char));
+int handle_unsubscribe(int fd_req, struct Client *client) {
+    char key[MAX_STRING_SIZE] = {0};
+    printf("[DEBUG] Starting unsubscribe operation\n");
 
-  int fd_resp = open(resp_pipe_path, O_WRONLY);
-  if (fd_resp == -1) {
-    perror("Error opening response pipe");
-    strncpy(result, "1", sizeof(result));
-    write(fd_resp, &result, sizeof(result));
+    int fd_resp = open(client->resp_pipe, O_WRONLY);
+    if (fd_resp == -1) {
+        fprintf(stderr, "[ERROR] Unsubscribe: Failed to open response pipe %s (errno=%d)\n", 
+                client->resp_pipe, errno);
+        return 1;
+    }
+    printf("[DEBUG] Opened response pipe: %s\n", client->resp_pipe);
+
+    if (read(fd_req, key, MAX_STRING_SIZE) < 0) {
+        fprintf(stderr, "[ERROR] Unsubscribe: Failed to read key from request (errno=%d)\n", 
+                errno);
+        write_response(client->resp_pipe, OP_CODE_UNSUBSCRIBE, 1);
+        close(fd_resp);
+        return 1;
+    }
+    printf("[DEBUG] Read key: %s\n", key);
+
+    if (kvs_unsubscribe(key, client->notif_pipe)) {
+        printf("[DEBUG] Successfully unsubscribed from key: %s\n", key);
+        printf("[DEBUG] Removed notification pipe: %s\n", client->notif_pipe);
+        write_response(client->resp_pipe, OP_CODE_UNSUBSCRIBE, 0);
+    } else {
+        fprintf(stderr, "[ERROR] Unsubscribe: KVS unsubscription failed for key: %s\n", key);
+        write_response(client->resp_pipe, OP_CODE_UNSUBSCRIBE, 1);
+    }
+
+    printf("[DEBUG] Unsubscribe operation completed for key: %s\n", key);
     close(fd_resp);
-    return 1;
-  }
-  if (read(fd_req, key, MAX_STRING_SIZE) < 0) {
-    write_str(STDERR_FILENO, "Failed to read response\n");
-    strncpy(result, "1", sizeof(result));
-    write(fd_resp, &result, sizeof(result));
-    close(fd_resp);
-    return 1;
-  }
-
-  if (kvs_subscribe(key,notif_pipe_path)) {
-    strncpy(result, "1", sizeof(result));
-  } else {
-    strncpy(result, "0", sizeof(result));
-  }
-  char response [3] = {0};
-  response[0] = '3';
-  response[1] = result[0];
-  response[2] = '\0';
-  write(fd_resp, response, sizeof(response));
-  close(fd_resp);
-
-  return 0;
-}
-
-int unsubscribe (int fd_req, char *name) {
-  char key[MAX_STRING_SIZE];
-  char result[2];
-  char resp_pipe_path[256] = "/tmp/resp";
-  char notif_pipe_path[256] = "/tmp/notif";
-  strncpy(resp_pipe_path + 9, name, strlen(name) * sizeof(char));
-  strncpy(notif_pipe_path + 10, name, strlen(name) * sizeof(char));
-
-  int fd_resp = open(resp_pipe_path, O_WRONLY);
-  if (fd_resp == -1) {
-    perror("Error opening response pipe");
-    strncpy(result, "1", sizeof(result));
-    write(fd_resp, &result, sizeof(result));
-    close(fd_resp);
-    return 1;
-  }
-
-  if (read(fd_req, key, MAX_STRING_SIZE) < 0) {
-    write_str(STDERR_FILENO, "Failed to read response\n");
-    strncpy(result, "1", sizeof(result));
-    write(fd_resp, &result, sizeof(result));
-    close(fd_resp);
-    return 1;
-  }
-
-  if (kvs_unsubscribe(key,notif_pipe_path)) {
-    strncpy(result, "0", sizeof(result));
-  } else {
-    strncpy(result, "1", sizeof(result));
-  }
-  char response [3] = {0};
-  response[0] = '4';
-  response[1] = result[0];
-  response[2] = '\0';
-  write(fd_resp, response, sizeof(response));
-  close(fd_resp);
-
-  return 0;
+    return 0;
 }

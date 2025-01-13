@@ -1,7 +1,7 @@
 WRITE [(a,anna)]
 WAIT 8000
 WRITE [(a,assa)]
-WAIT 2000
+WAIT 5000
 WRITE [(a,abba)]
 WAIT 2000
 DELETE [a]

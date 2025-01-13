@@ -1,4 +1,4 @@
-#include <dirent.h>
+/*#include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
@@ -88,4 +88,4 @@ void *fifo_reader (void *arg) {
     close(fd);
   }
   return NULL;
-}
+}*/

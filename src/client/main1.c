@@ -1,4 +1,4 @@
-#include <fcntl.h>
+/*#include <fcntl.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,41 +10,47 @@
 #include "../common/constants.h"
 #include "../common/io.h"
 
-// unfinished
 static void* notification_handler(void* arg) {
-    printf("[DEBUG] Notification handler started\n");
     char* notif_path = (char*)arg;
-  
+
+
+/*
+  // Read server response: OP_CODE(1) + result
+  char resp_buf[2];
+  if (read(resp_fd, resp_buf, 2) < 0) {
+      perror("read resp_pipe_path");
+      close(resp_fd);
+      return 1;
+  }
+  close(resp_fd);
+
+  // Print response code
+  printf("Server returned %d for operation: connect\n", (int)resp_buf[1]);
+
+  // Success if server returned 0
+  return (resp_buf[1] == 0) ? 0 : 1;
+
+
 
     while (1) {
-        char key[41] = {0};
-        char value[41] = {0};
-
+        char buffer[MAX_STRING_SIZE];
         int notif_fd = open(notif_path, O_RDONLY);
         if (notif_fd < 0) {
           perror("Failed to open notification FIFO");
           return NULL;
-        }        
-        // Read fixed-size fields
-        if (read_all(notif_fd, key, 41, NULL) <= 0 ||
-            read_all(notif_fd, value, 41, NULL) <= 0) {
-            close(notif_fd);
-            continue;
         }
-
-        // Trim spaces
-        for (int i = 39; i >= 0; i--) {
-            if (key[i] == ' ') key[i] = '\0'; else break;
+        int interrupted = 0;
+        if (read_all(notif_fd, buffer, sizeof(buffer),&interrupted) != 1) {
+          if (interrupted) {
+            perror("Error reading notif pipe\n");
+          } 
+          printf("Notification: %s\n", buffer);
+          close(notif_fd);
+          continue;
         }
-        for (int i = 39; i >= 0; i--) {
-            if (value[i] == ' ') value[i] = '\0'; else break;
-        }
-
-        printf("(%s,%s)\n", key, value);
+        printf("Notification: %s\n", buffer);
         close(notif_fd);
     }
-    
-
     return NULL;
 }
 
@@ -72,16 +78,15 @@ int main(int argc, char *argv[]) {
   strncat(server_pipe_path, argv[2], strlen(argv[2]) * sizeof(char));
 
 
-  if(strlen(argv[2]) > MAX_PIPE_PATH_LENGTH) {
+  if(strlen(argv[2]) < 0 || strlen(argv[2]) > MAX_PIPE_PATH_LENGTH) {
     fprintf(stderr, "Invalid register pipe path\n");
     return 1;
   }
- // int notif_pipe;
-  if (kvs_connect(req_pipe_path, resp_pipe_path, server_pipe_path, notif_pipe_path) != 0) {
+
+  if (kvs_connect(req_pipe_path, resp_pipe_path, server_pipe_path, notif_pipe_path, NULL) != 0) {
     fprintf(stderr, "Failed to connect to the server\n");
     return 1;
-  }  //se a conexão for successful entao avançamos
-  printf("Connected to server\n");
+  }
 
   pthread_t notif_thread;
   if (pthread_create(&notif_thread, NULL, notification_handler, (void*)notif_pipe_path) != 0) {
@@ -97,9 +102,10 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Failed to disconnect to the server\n");
         return 1;
       }
-      //close(notif_pipe);
       pthread_cancel(notif_thread);
       pthread_join(notif_thread, NULL);
+      printf("Disconnected from server\n");
+      return 0;
       printf("Disconnected from server\n");
       return 0;
 
@@ -153,4 +159,4 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
-}
+}*/

@@ -8,8 +8,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <semaphore.h>
-#include <signal.h>
 #include "constants.h"
 #include "io.h"
 #include "operations.h"
@@ -18,8 +16,9 @@
 #include "../common/protocol.h"
 #include "../common/io.h"
 #include "../common/constants.h"
-#include "fifo.h"
 #include "api.h"
+
+
 
 
 struct SharedData {
@@ -31,33 +30,11 @@ struct SharedData {
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t n_current_backups_lock = PTHREAD_MUTEX_INITIALIZER;
 
+struct Client *g_clients[MAX_SESSION_COUNT];
 size_t active_backups = 0; // Number of active backups
 size_t max_backups;        // Maximum allowed simultaneous backups
 size_t max_threads;        // Maximum allowed simultaneous threads
 char *jobs_directory = NULL;
-sem_t session_sem;
-
-volatile sig_atomic_t sigusr1_received = 0;
-
-// Signal handler for SIGUSR1
-void handle_sigusr1(int signum) {
-  if (signum == SIGUSR1) {
-    sigusr1_received = 1;
-  }
-}
-
-// Function to set up the SIGUSR1 handler
-void setup_signal_handler() {
-    struct sigaction sa;
-    sa.sa_handler = handle_sigusr1;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-
-    if (sigaction(SIGUSR1, &sa, NULL) == -1) {
-        perror("Error setting up SIGUSR1 handler");
-        exit(EXIT_FAILURE);
-    }
-}
 
 int filter_job_files(const struct dirent *entry) {
   const char *dot = strrchr(entry->d_name, '.');
@@ -267,6 +244,30 @@ static void *get_file(void *arguments) {
   pthread_exit(NULL);
 }
 
+
+void *registry_handler(void *arg) {
+    char *registry_pipe = (char *)arg;
+    
+    while (1) {
+        int fd = open(registry_pipe, O_RDONLY);
+        if (fd == -1) continue;
+
+        char opcode;
+        if (read(fd, &opcode, 1) == 1 && opcode == OP_CODE_CONNECT) {
+            for (int i = 0; i < MAX_SESSION_COUNT; i++) {
+                if (!g_clients[i]->active) {
+                    if (handle_connection(fd) == 0) {
+                        pthread_create(&g_clients[i]->thread, NULL, client_handler, &g_clients[i]);
+                    }
+                    break;
+                }
+            }
+        }
+        close(fd);
+    }
+    return NULL;
+}
+
 static void dispatch_threads(DIR *dir,const char *fifo_registry) {
   pthread_t *threads = malloc(max_threads * sizeof(pthread_t));
 
@@ -288,16 +289,11 @@ static void dispatch_threads(DIR *dir,const char *fifo_registry) {
     }
   }
 
-  
-  unlink (fifo_registry);
-  if(mkfifo(fifo_registry, 0666) < 0){
-    perror("Error creating server-to-client FIFO");
-    return;
-  }
-  pthread_t receiver_thread;
-  pthread_create(&receiver_thread, NULL, fifo_reader, (void *)fifo_registry);
-  pthread_join(receiver_thread, NULL);
+  // ler do FIFO de registo///////////////////////////////////////////////////////////////////////////////////////////////
 
+  pthread_t receiver_thread;
+  pthread_create(&receiver_thread, NULL, registry_handler, (void *)fifo_registry);
+  pthread_join(receiver_thread, NULL);
 
   for (unsigned int i = 0; i < max_threads; i++) {
     if (pthread_join(threads[i], NULL) != 0) {
@@ -355,60 +351,35 @@ int main(int argc, char **argv) {
     write_str(STDERR_FILENO, "Invalid path\n");
     return 0;
   }
+  
 
+
+  
   if (kvs_init()) {
     write_str(STDERR_FILENO, "Failed to initialize KVS\n");
     return 1;
   }
-
-  setup_signal_handler();
-
-  if (sem_init(&session_sem, 0, MAX_SESSION_COUNT) != 0) {
-    perror("Failed to initialize semaphore");
-    return 1;
-  }
-
-  // Block SIGUSR1 in all threads by default
-  sigset_t set;
-  sigemptyset(&set);
-  sigaddset(&set, SIGUSR1);
-  if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0) {
-    perror("Failed to block SIGUSR1");
-    return 1;
-  }
-
-  // Allow only the main thread to receive SIGUSR1
-  // Restore signal mask for the main thread
-  if (pthread_sigmask(SIG_UNBLOCK, &set, NULL) != 0) {
-    perror("Failed to unblock SIGUSR1 for main thread");
-    return 1;
-  }
-
 
   DIR *dir = opendir(argv[1]);
   if (dir == NULL) {
     fprintf(stderr, "Failed to open directory: %s\n", argv[1]);
     return 0;
   }
+
   char *fifo_registry = malloc (strlen(argv[4] + 1));
   strcpy(fifo_registry, argv[4]);
+  unlink (fifo_registry);
+  if (mkfifo(fifo_registry, 0666) < 0) {
+      perror("Error creating server registration FIFO");
+      return 1;
+  }
   dispatch_threads(dir, fifo_registry);
+
   free(fifo_registry);
 
   if (closedir(dir) == -1) {
     fprintf(stderr, "Failed to close directory\n");
     return 0;
-  }
-
-  while (1) {
-  if (sigusr1_received) {
-    printf("SIGUSR1 received. Cleaning up subscriptions and closing FIFOs.\n");
-    kvs_subscription_terminate(); // Implement this function accordingly
-    sigusr1_received = 0;        // Reset the flag
-  }
-
-    // Other server operations...
-    sleep(1); // Prevent busy-waiting
   }
 
   while (active_backups > 0) {

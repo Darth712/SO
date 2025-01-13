@@ -1,4 +1,4 @@
-#include "api.h"
+/*#include "api.h"
 #include "../common/constants.h"
 #include "../common/protocol.h"
 #include <fcntl.h>
@@ -16,7 +16,8 @@ static char s_notif_pipe_path[MAX_PIPE_PATH_LENGTH];
 
 
 int kvs_connect(char const *req_pipe_path, char const *resp_pipe_path,
-                char const *server_pipe_path, char const *notif_pipe_path) {
+                char const *server_pipe_path, char const *notif_pipe_path,
+                int *notif_pipe) {
   
   strncpy(s_req_pipe_path, req_pipe_path, sizeof(s_req_pipe_path)-1);
   strncpy(s_resp_pipe_path, resp_pipe_path, sizeof(s_resp_pipe_path)-1); 
@@ -26,45 +27,23 @@ int kvs_connect(char const *req_pipe_path, char const *resp_pipe_path,
   unlink(resp_pipe_path);
   unlink(notif_pipe_path);
 
-
-
   if (mkfifo(req_pipe_path, 0666) < 0){
     perror("Error creating request FIFO file");
     return 1;
   }
   if (mkfifo(resp_pipe_path, 0666) < 0){
     perror("Error creating response FIFO");
-    unlink(req_pipe_path);
     return 1;
   }
   if (mkfifo(notif_pipe_path, 0666) < 0){
     perror("Error creating notification FIFO");
-    unlink(req_pipe_path);
-    unlink(resp_pipe_path);
     return 1;
   }
-
-/*
-
-  *notif_pipe = open(notif_pipe_path, O_RDONLY | O_NONBLOCK);
-  if (*notif_pipe < 0) {
-      perror("Error opening notification FIFO");
-      unlink(req_pipe_path);
-      unlink(resp_pipe_path);
-      unlink(notif_pipe_path);
-      return 1;
-  }
-
-*/
-
 
   // Open the server pipe
   int fd_server = open(server_pipe_path, O_WRONLY);
   if (fd_server == -1) {
     perror("Error opening server pipe from client");
-    unlink(req_pipe_path);
-    unlink(resp_pipe_path);
-    unlink(notif_pipe_path);
     return 1;
   }
   // preparar mensagem de pedido
@@ -99,6 +78,7 @@ int kvs_connect(char const *req_pipe_path, char const *resp_pipe_path,
       close(resp_fd);
       return 1;
   }
+  printf("resp_buf: %s\n", resp_buf);
   close(resp_fd);
 
   // Print response code
@@ -135,13 +115,12 @@ int kvs_disconnect(char const *req_pipe_path, char const *resp_pipe_path) {
   }
   // Read server response: OP_CODE(2) + result
   char resp_buf[3] = {0};
-
   if (read(resp_fd, resp_buf, sizeof(resp_buf)) < 0) {
       perror("read resp_pipe_path");
       close(resp_fd);
       return 1;
   }
-
+  printf("resp_buf: %s\n", resp_buf);
   close(resp_fd);
 
   // clean pipes
@@ -186,13 +165,10 @@ int kvs_subscribe(char const *req_pipe_path, char const *resp_pipe_path, const c
       close(resp_fd);
       return 1;
   }
-  
   close(resp_fd);
 
-
-
   printf("Server returned %c for operation: subscribe\n", resp_buf[1]);
-  return (resp_buf[1] == '0') ? 0 : 1;
+  return (resp_buf[1] == '1') ? 0 : 1;
 
 }
 
@@ -228,10 +204,9 @@ int kvs_unsubscribe(char const *req_pipe_path, char const *resp_pipe_path, const
       close(resp_fd);
       return 1;
   }
-
   close(resp_fd);
 
   printf("Server returned %c for operation: unsubscribe\n", resp_buf[1]);
   return (resp_buf[1] == '0') ? 0 : 1;
 
-}
+}*/

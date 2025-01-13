@@ -102,9 +102,6 @@ int main(int argc, char *argv[]) {
       }
       pthread_cancel(notif_thread);
       pthread_join(notif_thread, NULL);
-      printf("Disconnected from server\n");
-      return 0;
-      printf("Disconnected from server\n");
       return 0;
 
     case CMD_SUBSCRIBE:

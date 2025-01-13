@@ -77,7 +77,6 @@ int kvs_connect(char const *req_pipe_path, char const *resp_pipe_path,
       close(resp_fd);
       return 1;
   }
-  printf("resp_buf: %s\n", resp_buf);
   close(resp_fd);
 
   // Print response code
@@ -119,7 +118,6 @@ int kvs_disconnect(char const *req_pipe_path, char const *resp_pipe_path) {
       close(resp_fd);
       return 1;
   }
-  printf("resp_buf: %s\n", resp_buf);
   close(resp_fd);
 
   // clean pipes
